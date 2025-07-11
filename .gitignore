@@ -43,3 +43,6 @@ coverage/
 
 # Misc
 *.tsbuildinfo
+
+# 모델 파일 (용량이 큰 가중치 데이터)
+public/models/*.json

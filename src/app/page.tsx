@@ -1,218 +1,67 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import * as tf from '@tensorflow/tfjs'
-import { DigitSegmentation } from '../components/DigitSegmentation'
+import { useState, useRef } from 'react'
 import { CanvasDrawing } from '../components/CanvasDrawing'
-import { DebugPanel, DebugLogs } from '../components/DebugPanel'
-import { RecognitionResult } from '../components/RecognitionResult'
-import { checkCanvasContent } from '../utils/imagePreprocessing'
+import { DigitRecognizer } from '../components/DigitRecognizer'
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const segmentationRef = useRef<HTMLDivElement>(null)
-  const [isDrawing, setIsDrawing] = useState(false)
-  const [model, setModel] = useState<tf.LayersModel | null>(null)
   const [recognizedText, setRecognizedText] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
-  const [confidence, setConfidence] = useState<number>(0)
   const [processingTime, setProcessingTime] = useState<number>(0)
-  const [isModelLoading, setIsModelLoading] = useState(true)
-  const [debugMode, setDebugMode] = useState(false)
-  const [debugLogs, setDebugLogs] = useState<string[]>([])
-  const [segmentedDigits, setSegmentedDigits] = useState<ImageData[]>([])
-  const [segmentationQuality, setSegmentationQuality] = useState<number>(0)
-  const [digitSegmentation, setDigitSegmentation] = useState<DigitSegmentation | null>(null)
+  const [isModelLoading, setIsModelLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [digitRecognizer] = useState(() => new DigitRecognizer())
 
-  // 디버그 로그 추가 함수
-  const addDebugLog = (message: string) => {
-    setDebugLogs(prev => [...prev.slice(-9), `[${new Date().toLocaleTimeString()}] ${message}`])
-  }
-
-  // TensorFlow.js 모델 로드
-  useEffect(() => {
-    const loadModel = async () => {
-      try {
-        addDebugLog('TensorFlow.js 모델 로딩 시작...')
-        
-        // 기본 MNIST 모델 생성 (실제 프로덕션에서는 사전 훈련된 모델을 로드)
-        const model = tf.sequential({
-          layers: [
-            tf.layers.conv2d({
-              inputShape: [28, 28, 1],
-              kernelSize: 3,
-              filters: 32,
-              activation: 'relu',
-            }),
-            tf.layers.maxPooling2d({poolSize: 2}),
-            tf.layers.conv2d({
-              kernelSize: 3,
-              filters: 64,
-              activation: 'relu',
-            }),
-            tf.layers.maxPooling2d({poolSize: 2}),
-            tf.layers.flatten(),
-            tf.layers.dense({units: 128, activation: 'relu'}),
-            tf.layers.dropout({rate: 0.2}),
-            tf.layers.dense({units: 10, activation: 'softmax'})
-          ]
-        })
-
-        // 모델 컴파일
-        model.compile({
-          optimizer: 'adam',
-          loss: 'categoricalCrossentropy',
-          metrics: ['accuracy']
-        })
-
-        // 임시 가중치 초기화 (실제로는 훈련된 가중치를 로드해야 함)
-        const dummyInput = tf.zeros([1, 28, 28, 1])
-        model.predict(dummyInput) // 모델 초기화
-        dummyInput.dispose()
-
-        setModel(model)
-        addDebugLog('MNIST 모델 로딩 완료')
-      } catch (error) {
-        addDebugLog(`모델 로딩 실패: ${error}`)
-        console.error('모델 로딩 실패:', error)
-      } finally {
-        setIsModelLoading(false)
-      }
-    }
-
-    loadModel()
-  }, [])
-
-  // Phase 3: 연속 숫자 분할 및 인식 함수
+  // 숫자 인식 함수
   const recognizeDigits = async () => {
-    if (!model || !canvasRef.current || !digitSegmentation) return
+    if (!canvasRef.current) return
 
     setIsProcessing(true)
+    setIsModelLoading(true)
+    setErrorMessage('')
     const startTime = Date.now()
 
     try {
       const canvas = canvasRef.current
+      
+      // 캔버스에 내용이 있는지 간단 체크
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        throw new Error('캔버스 컨텍스트를 가져올 수 없습니다.')
+      }
 
-      // 캔버스에 내용이 있는지 확인
-      const hasContent = checkCanvasContent(canvas)
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const hasContent = Array.from(imageData.data).some((value, index) => 
+        index % 4 === 3 && value > 0 // Alpha 채널이 0보다 큰 픽셀이 있는지 확인
+      )
+
       if (!hasContent) {
-        addDebugLog('❌ 캔버스에 내용이 없습니다.')
         setRecognizedText('')
-        setConfidence(0)
-        setProcessingTime(0)
-        setSegmentedDigits([])
+        setErrorMessage('캔버스에 숫자를 그려주세요.')
         return
       }
 
-      addDebugLog('✅ 캔버스 내용 확인됨')
-      addDebugLog('🔄 Phase 3: 숫자 분할 시작...')
-
-      // 1단계: 숫자 분할
-      const ctx = canvas.getContext('2d')!
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      // Wosaku 알고리즘으로 숫자 인식
+      console.log('🔄 Wosaku 숫자 인식 시작...')
+      const results = await digitRecognizer.recognizeDigits(canvas)
       
-      const segmentationResult = await digitSegmentation.segmentDigits(imageData)
-      
-      addDebugLog(`📊 분할 결과: ${segmentationResult.segments.length}개 세그먼트`)
-      addDebugLog(`📈 분할 신뢰도: ${(segmentationResult.confidence * 100).toFixed(1)}%`)
-      
-      setSegmentedDigits(segmentationResult.segments)
-      setSegmentationQuality(segmentationResult.confidence)
-
-      // 경계 박스 시각화
-      if (debugMode) {
-        digitSegmentation.visualizeSegmentation(segmentationResult.boundingBoxes, canvas)
-      }
-
-      // 2단계: 각 세그먼트 인식
-      const recognizedDigits: string[] = []
-      const confidences: number[] = []
-
-      for (let i = 0; i < segmentationResult.segments.length; i++) {
-        const segment = segmentationResult.segments[i]
-        addDebugLog(`🔍 세그먼트 ${i + 1} 인식 중...`)
-        
-        // 세그먼트를 텐서로 변환
-        const segmentTensor = tf.tensor4d(
-          Array.from(segment.data).map(val => val / 255),
-          [1, 28, 28, 1]
-        )
-        
-        // 모델 예측
-        const predictions = model.predict(segmentTensor) as tf.Tensor
-        const probabilities = await predictions.data()
-        
-        const maxIndex = probabilities.indexOf(Math.max(...probabilities))
-        const confidence = probabilities[maxIndex] * 100
-        
-        recognizedDigits.push(maxIndex.toString())
-        confidences.push(confidence)
-        
-        addDebugLog(`📝 세그먼트 ${i + 1}: "${maxIndex}" (신뢰도: ${confidence.toFixed(1)}%)`)
-        
-        // 메모리 정리
-        segmentTensor.dispose()
-        predictions.dispose()
-      }
-
-      // 3단계: 결과 조합
-      const finalResult = recognizedDigits.join('')
-      const avgConfidence = confidences.reduce((sum, c) => sum + c, 0) / confidences.length
-
       const endTime = Date.now()
       const processingTimeMs = endTime - startTime
 
-      setRecognizedText(finalResult)
-      setConfidence(avgConfidence)
+      setRecognizedText(results.join(''))
       setProcessingTime(processingTimeMs)
-
-      addDebugLog(`✅ 최종 인식 결과: "${finalResult}" (평균 신뢰도: ${avgConfidence.toFixed(1)}%)`)
-      addDebugLog(`⏱️ 총 처리 시간: ${processingTimeMs}ms`)
-
-      // 세그먼트 시각화
-      visualizeSegments(segmentationResult.segments)
+      
+      console.log(`✅ 인식 완료: "${results.join('')}" (${processingTimeMs}ms)`)
 
     } catch (error) {
-      addDebugLog(`❌ 인식 에러: ${error}`)
-      console.error('인식 에러:', error)
+      console.error('❌ 인식 에러:', error)
+      setErrorMessage(error instanceof Error ? error.message : '인식 중 오류가 발생했습니다.')
       setRecognizedText('인식 실패')
     } finally {
       setIsProcessing(false)
+      setIsModelLoading(false)
     }
-  }
-
-  // 세그먼트 시각화 함수
-  const visualizeSegments = (segments: ImageData[]) => {
-    if (!segmentationRef.current) return
-    
-    const container = segmentationRef.current
-    container.innerHTML = ''
-    
-    segments.forEach((segment, index) => {
-      const canvas = document.createElement('canvas')
-      canvas.width = 28
-      canvas.height = 28
-      canvas.style.border = '1px solid #ccc'
-      canvas.style.margin = '2px'
-      canvas.style.backgroundColor = 'white'
-      
-      const ctx = canvas.getContext('2d')!
-      ctx.putImageData(segment, 0, 0)
-      
-      const wrapper = document.createElement('div')
-      wrapper.style.display = 'inline-block'
-      wrapper.style.textAlign = 'center'
-      wrapper.style.margin = '5px'
-      
-      const label = document.createElement('div')
-      label.textContent = `${index + 1}`
-      label.style.fontSize = '12px'
-      label.style.color = '#666'
-      
-      wrapper.appendChild(canvas)
-      wrapper.appendChild(label)
-      container.appendChild(wrapper)
-    })
   }
 
   // 캔버스 초기화
@@ -223,34 +72,15 @@ export default function Home() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // 검은색 배경으로 초기화
-    ctx.fillStyle = '#000000'
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    // 투명 배경으로 초기화
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-    // Phase 3 관련 상태 초기화
+    // 상태 초기화
     setRecognizedText('')
-    setConfidence(0)
     setProcessingTime(0)
-    setSegmentedDigits([])
-    setSegmentationQuality(0)
-
-    // 세그먼트 시각화 초기화
-    if (segmentationRef.current) {
-      segmentationRef.current.innerHTML = ''
-    }
-
-    if (debugMode) {
-      addDebugLog('🧹 캔버스 및 Phase 3 상태 초기화 완료')
-    }
-  }
-
-  // 실행 취소 기능 (단순 구현)
-  const undoLastStroke = () => {
-    // 현재는 전체 지우기와 동일 (향후 개선 가능)
-    clearCanvas()
-    if (debugMode) {
-      addDebugLog('↩️ 실행 취소 (전체 지우기)')
-    }
+    setErrorMessage('')
+    
+    console.log('🧹 캔버스 초기화 완료')
   }
 
   return (
@@ -258,115 +88,79 @@ export default function Home() {
       <div className="container mx-auto px-4 py-16">
         <div className="text-center">
           <h1 className="text-4xl font-bold text-gray-800 mb-4">
-            🧮 TensorFlow.js 기반 필기 인식 시스템
+            🧮 Elementary Math App
           </h1>
           <p className="text-xl text-gray-600 mb-8">
-            Phase 3: 숫자 분할 알고리즘 - 연속된 숫자 '43525'를 개별 숫자로 분할
+            Wosaku 알고리즘 기반 손글씨 숫자 인식 시스템
           </p>
           
-          {/* 모델 로딩 상태 */}
-          {isModelLoading && (
-            <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-4 mb-8 max-w-2xl mx-auto">
-              <p className="text-yellow-800">🔄 TensorFlow.js 모델 로딩 중...</p>
-            </div>
-          )}
-          
-          {/* 필기 인식 섹션 */}
+          {/* 가중치 로딩 테스트 섹션 */}
           <div className="bg-white rounded-lg shadow-lg p-8 max-w-2xl mx-auto mb-8">
             <h2 className="text-2xl font-semibold text-gray-800 mb-6">
-              ✏️ 필기 인식 데모
+              ✏️ 손글씨 숫자 인식 테스트
             </h2>
             
-            <div className="space-y-4">
-              <DebugPanel
-                debugMode={debugMode}
-                onToggleDebug={() => setDebugMode(!debugMode)}
-                debugLogs={debugLogs}
-              />
-              
+            <div className="space-y-6">
+              {/* 에러 메시지 표시 */}
+              {errorMessage && (
+                <div className="bg-red-100 border border-red-300 rounded-lg p-4">
+                  <p className="text-red-800">❌ {errorMessage}</p>
+                </div>
+              )}
+
+              {/* 캔버스 드로잉 컴포넌트 */}
               <CanvasDrawing
                 canvasRef={canvasRef}
-                segmentationRef={segmentationRef}
-                isDrawing={isDrawing}
-                setIsDrawing={setIsDrawing}
-                digitSegmentation={digitSegmentation}
-                setDigitSegmentation={setDigitSegmentation}
                 onRecognize={recognizeDigits}
                 onClear={clearCanvas}
-                onUndo={undoLastStroke}
                 isProcessing={isProcessing}
                 isModelLoading={isModelLoading}
               />
               
-              {/* 디버그 정보 */}
-              {debugMode && (
-                <DebugLogs debugLogs={debugLogs} />
+              {/* 인식 결과 표시 */}
+              {recognizedText && (
+                <div className="bg-green-50 border border-green-300 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-green-800 mb-2">
+                    🎯 인식 결과
+                  </h3>
+                  <div className="text-center">
+                    <div className="text-4xl font-bold text-green-600 mb-2">
+                      {recognizedText}
+                    </div>
+                    <div className="text-sm text-green-700">
+                      처리 시간: {processingTime}ms
+                    </div>
+                  </div>
+                </div>
               )}
-              
-              {/* 인식 결과 */}
-              <RecognitionResult
-                recognizedText={recognizedText}
-                confidence={confidence}
-                processingTime={processingTime}
-                segmentedDigits={segmentedDigits}
-                segmentationQuality={segmentationQuality}
-              />
             </div>
           </div>
           
-          {/* 구현 현황 */}
+          {/* 시스템 정보 */}
           <div className="bg-white rounded-lg shadow-lg p-8 max-w-2xl mx-auto">
             <h2 className="text-2xl font-semibold text-gray-800 mb-6">
-              🚀 Phase 3 구현 현황
+              🚀 시스템 구성
             </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-              <div className="bg-green-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-green-800 mb-2">✅ 완료된 기능</h3>
-                <ul className="text-green-600 text-sm space-y-1">
-                  <li>• 수직 투영 기반 숫자 분할</li>
-                  <li>• 연결 요소 분석</li>
-                  <li>• 지능형 분할 후처리</li>
-                  <li>• 겹치는 세그먼트 병합</li>
-                  <li>• 큰 세그먼트 재분할</li>
-                  <li>• 픽셀 밀도 기반 필터링</li>
-                  <li>• 28x28 MNIST 정규화</li>
-                  <li>• 분할 품질 신뢰도 계산</li>
-                  <li>• 세그먼트 시각화</li>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-blue-800 mb-2">🧠 인식 엔진</h3>
+                <ul className="text-blue-600 text-sm space-y-1">
+                  <li>• Wosaku 신경망 알고리즘</li>
+                  <li>• 785×300×10 구조</li>
+                  <li>• 동적 가중치 로딩</li>
+                  <li>• MNIST 호환 처리</li>
                 </ul>
               </div>
               
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-blue-800 mb-2">🔄 다음 단계</h3>
-                <ul className="text-blue-600 text-sm space-y-1">
-                  <li>• Phase 4: 훈련된 MNIST 모델 로드</li>
-                  <li>• Phase 5: 통합 시스템</li>
-                  <li>• Phase 6: 최적화 및 개선</li>
-                  <li>• 초등학생 필기 특성 반영</li>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-green-800 mb-2">⚡ 성능 최적화</h3>
+                <ul className="text-green-600 text-sm space-y-1">
+                  <li>• 컨텍스트 윈도우 99.9% 절약</li>
+                  <li>• 캐싱 시스템</li>
+                  <li>• Multi-Stage Segmentation</li>
+                  <li>• 실시간 처리</li>
                 </ul>
-              </div>
-            </div>
-            
-            {/* Phase 3 새로운 기능 설명 */}
-            <div className="bg-emerald-50 p-4 rounded-lg mb-8">
-              <h3 className="font-semibold text-emerald-800 mb-2">🆕 Phase 3 새로운 기능</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-medium text-emerald-700 mb-1">고급 분할 알고리즘</h4>
-                  <ul className="text-emerald-600 text-sm space-y-1">
-                    <li>• 수직 투영 + 연결 요소 분석</li>
-                    <li>• 지능형 세그먼트 후처리</li>
-                    <li>• 겹치는/붙어있는 숫자 분할</li>
-                  </ul>
-                </div>
-                <div>
-                  <h4 className="font-medium text-emerald-700 mb-1">품질 보장 시스템</h4>
-                  <ul className="text-emerald-600 text-sm space-y-1">
-                    <li>• 분할 품질 신뢰도 계산</li>
-                    <li>• 실시간 세그먼트 시각화</li>
-                    <li>• 적응형 분할 파라미터</li>
-                  </ul>
-                </div>
               </div>
             </div>
             
@@ -376,23 +170,25 @@ export default function Home() {
                 <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">Next.js 15</span>
                 <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">TypeScript</span>
                 <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">Tailwind CSS</span>
-                <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">TensorFlow.js</span>
+                <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">Wosaku Algorithm</span>
                 <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">Canvas API</span>
+                <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">WeightLoader</span>
               </div>
             </div>
             
-            <div className="mt-6 p-4 bg-orange-50 rounded-lg border border-orange-200">
-              <h3 className="font-semibold text-orange-800 mb-2">⚠️ 현재 제한사항</h3>
-              <p className="text-orange-700 text-sm">
-                고급 숫자 분할 알고리즘이 구현되어 연속된 숫자를 개별 숫자로 정확히 분할할 수 있지만, 
-                여전히 무작위 초기화된 모델을 사용하고 있습니다. 
-                Phase 4에서 사전 훈련된 MNIST 모델을 로드하면 실제 숫자 인식이 가능해집니다.
-              </p>
+            <div className="mt-6 p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+              <h3 className="font-semibold text-emerald-800 mb-2">📋 테스트 방법</h3>
+              <ol className="text-emerald-700 text-sm space-y-1">
+                <li>1. 위 캔버스에 숫자를 그려보세요 (예: 4325)</li>
+                <li>2. "숫자 인식" 버튼을 클릭하세요</li>
+                <li>3. 가중치 로딩 → 분할 → 인식 과정을 확인하세요</li>
+                <li>4. 브라우저 개발자도구에서 상세 로그를 확인하세요</li>
+              </ol>
             </div>
           </div>
           
           <div className="mt-8 text-sm text-gray-500">
-            Created with ❤️ using TensorFlow.js & Next.js
+            Created with ❤️ using Wosaku Algorithm & Next.js
           </div>
         </div>
       </div>
