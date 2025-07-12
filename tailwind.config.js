@@ -11,6 +11,9 @@ module.exports = {
         background: "var(--background)",
         foreground: "var(--foreground)",
       },
+      borderWidth: {
+        '3': '3px',
+      }
     },
   },
   plugins: [],

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, RefObject } from 'react'
+import { useEffect, RefObject, useRef } from 'react'
 
 interface CanvasDrawingProps {
   canvasRef: RefObject<HTMLCanvasElement | null>
@@ -8,6 +8,7 @@ interface CanvasDrawingProps {
   onClear: () => void
   isProcessing: boolean
   isModelLoading: boolean
+  realTimeRecognition?: boolean
 }
 
 export function CanvasDrawing({
@@ -15,8 +16,36 @@ export function CanvasDrawing({
   onRecognize,
   onClear,
   isProcessing,
-  isModelLoading
+  isModelLoading,
+  realTimeRecognition = true
 }: CanvasDrawingProps) {
+  
+  const recognitionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // 실시간 인식 함수 (디바운스 적용)
+  const triggerRealTimeRecognition = () => {
+    if (!realTimeRecognition || isProcessing) return
+
+    // 기존 타임아웃 클리어
+    if (recognitionTimeoutRef.current) {
+      clearTimeout(recognitionTimeoutRef.current)
+    }
+
+    // 500ms 후 인식 실행
+    recognitionTimeoutRef.current = setTimeout(() => {
+      console.log('🔄 실시간 인식 시작...')
+      onRecognize()
+    }, 500)
+  }
+
+  // 컴포넌트 언마운트 시 타임아웃 정리
+  useEffect(() => {
+    return () => {
+      if (recognitionTimeoutRef.current) {
+        clearTimeout(recognitionTimeoutRef.current)
+      }
+    }
+  }, [])
   
   // 캔버스 초기 설정
   useEffect(() => {
@@ -29,10 +58,10 @@ export function CanvasDrawing({
     // 투명 배경으로 초기화 (DigitRecognizer가 Alpha 채널을 사용)
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     
-    // 드로잉 스타일 설정
+    // 드로잉 스타일 설정 (실제 답안지 스타일)
     ctx.strokeStyle = '#000000'  // 검은색 선
     ctx.fillStyle = '#000000'    // 검은색 채우기
-    ctx.lineWidth = 8            // 굵은 선 (인식률 향상)
+    ctx.lineWidth = 2            // 얇은 선 (연필 굵기)
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     ctx.globalAlpha = 1.0        // 완전 불투명
@@ -66,6 +95,9 @@ export function CanvasDrawing({
       canvas.removeEventListener('mousemove', handleMouseMove)
       canvas.removeEventListener('mouseup', handleMouseUp)
       canvas.removeEventListener('mouseleave', handleMouseUp)
+      
+      // 드로잉 완료 후 실시간 인식 트리거
+      triggerRealTimeRecognition()
     }
 
     canvas.addEventListener('mousemove', handleMouseMove)
@@ -110,23 +142,26 @@ export function CanvasDrawing({
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
     e.preventDefault()
+    
+    // 터치 완료 후 실시간 인식 트리거
+    triggerRealTimeRecognition()
   }
 
   return (
     <div className="space-y-4">
-      {/* 캔버스 - 400x400px (Wosaku 알고리즘 최적화 크기) */}
-      <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50">
+      {/* 캔버스 - 200x100px (실제 답안영역 크기) */}
+      <div className="border border-gray-300 rounded p-2 bg-gray-50">
         <div className="text-center mb-2">
-          <span className="text-sm text-gray-600">
-            400×400px 드로잉 캔버스 - 연속된 숫자를 그려보세요 (예: 4325)
+          <span className="text-xs text-gray-600">
+            답안 작성란 (200×100px)
           </span>
         </div>
         <div className="flex justify-center">
           <canvas
             ref={canvasRef}
-            width={400}
-            height={400}
-            className="border-2 border-gray-400 rounded cursor-crosshair bg-white"
+            width={200}
+            height={100}
+            className="border border-gray-400 cursor-crosshair bg-white"
             onMouseDown={startDrawing}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
@@ -158,9 +193,9 @@ export function CanvasDrawing({
       </div>
       
       {/* 사용법 안내 */}
-      <div className="text-center text-sm text-gray-500">
-        <p>💡 여러 숫자를 연속으로 그리면 자동으로 분할하여 인식합니다</p>
-        <p>🎯 최적 크기: 각 숫자당 약 18픽셀 높이로 그려주세요</p>
+      <div className="text-center text-xs text-gray-500">
+        <p>💡 작은 답안란에 연속된 숫자를 써주세요</p>
+        <p>📝 실제 시험지처럼 얇은 선으로 작게 써도 인식됩니다</p>
       </div>
     </div>
   )
