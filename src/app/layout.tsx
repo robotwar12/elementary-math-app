@@ -16,6 +16,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
+      <head>
+        {/* CSS 애니메이션 추가 */}
+        <style dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `
+        }} />
+        
+        <script src="https://cdn.jsdelivr.net/npm/onnxjs/dist/onnx.min.js"></script>
+        <script src="/stroke-digit-recognizer.js"></script>
+      </head>
       <body className={inter.className}>{children}</body>
     </html>
   )
