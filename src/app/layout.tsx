@@ -17,6 +17,12 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
+        {/* 터치펜 최적화 뷰포트 설정 */}
+        <meta 
+          name="viewport" 
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, touch-action=manipulation" 
+        />
+        
         {/* CSS 애니메이션 추가 */}
         <style dangerouslySetInnerHTML={{
           __html: `

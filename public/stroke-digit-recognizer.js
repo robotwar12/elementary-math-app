@@ -105,11 +105,15 @@ class StrokeDigitRecognizer {
         this.boundPointerMove = this.handlePointerMove.bind(this);
         this.boundPointerUp = this.handlePointerUp.bind(this);
 
+        // Enable pointer events for better stylus support
+        this.canvas.style.touchAction = 'none';
+        
         this.canvas.addEventListener('pointerdown', this.boundPointerDown);
         this.canvas.addEventListener('pointermove', this.boundPointerMove);
         this.canvas.addEventListener('pointerup', this.boundPointerUp);
         this.canvas.addEventListener('pointercancel', this.boundPointerUp);
         this.canvas.addEventListener('pointerout', this.boundPointerUp);
+        this.canvas.addEventListener('pointerleave', this.boundPointerUp);
     }
 
     /**
@@ -134,18 +138,33 @@ class StrokeDigitRecognizer {
         
         const point = this.getPointerPosition(e);
         
+        // Add pressure and pointer type information
+        point.pressure = e.pressure || 0.5;
+        point.pointerType = e.pointerType || 'unknown';
+        point.tiltX = e.tiltX || 0;
+        point.tiltY = e.tiltY || 0;
+        
         this.currentStroke = {
             points: [{...point, timestamp: Date.now()}],
             boundingBox: {minX: point.x, maxX: point.x, minY: point.y, maxY: point.y},
-            startTime: Date.now()
+            startTime: Date.now(),
+            pointerType: point.pointerType
         };
+        
+        // Adjust line width based on pressure (for stylus)
+        const adjustedLineWidth = point.pointerType === 'pen' 
+            ? this.ctx.lineWidth * (0.5 + point.pressure * 0.5)
+            : this.ctx.lineWidth;
         
         // Draw starting point
         this.ctx.beginPath();
-        this.ctx.arc(point.x, point.y, this.ctx.lineWidth/2, 0, 2 * Math.PI);
+        this.ctx.arc(point.x, point.y, adjustedLineWidth/2, 0, 2 * Math.PI);
         this.ctx.fill();
         
-        this.debugLog('STROKE_COLLECTION', `Stroke ${this.strokes.length + 1} started at (${point.x.toFixed(0)}, ${point.y.toFixed(0)})`);
+        this.debugLog('STROKE_COLLECTION', 
+            `Stroke ${this.strokes.length + 1} started at (${point.x.toFixed(0)}, ${point.y.toFixed(0)}) ` +
+            `[${point.pointerType}, pressure: ${point.pressure.toFixed(2)}]`
+        );
     }
 
     /**
@@ -158,11 +177,29 @@ class StrokeDigitRecognizer {
         const point = this.getPointerPosition(e);
         const lastPoint = this.currentStroke.points[this.currentStroke.points.length - 1];
         
-        // Draw line
+        // Add pressure and pointer information
+        point.pressure = e.pressure || 0.5;
+        point.pointerType = e.pointerType || 'unknown';
+        point.tiltX = e.tiltX || 0;
+        point.tiltY = e.tiltY || 0;
+        
+        // Adjust line width based on pressure (for stylus)
+        const adjustedLineWidth = point.pointerType === 'pen' 
+            ? this.ctx.lineWidth * (0.5 + point.pressure * 0.5)
+            : this.ctx.lineWidth;
+        
+        // Save current line width and restore after drawing
+        const originalLineWidth = this.ctx.lineWidth;
+        this.ctx.lineWidth = adjustedLineWidth;
+        
+        // Draw line with pressure-sensitive width
         this.ctx.beginPath();
         this.ctx.moveTo(lastPoint.x, lastPoint.y);
         this.ctx.lineTo(point.x, point.y);
         this.ctx.stroke();
+        
+        // Restore original line width
+        this.ctx.lineWidth = originalLineWidth;
         
         // Add point to stroke
         this.currentStroke.points.push({...point, timestamp: Date.now()});
@@ -207,14 +244,16 @@ class StrokeDigitRecognizer {
     }
 
     /**
-     * Get pointer position relative to canvas
+     * Get pointer position relative to canvas with high DPI support
      */
     getPointerPosition(e) {
         const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
         
         return {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
         };
     }
 

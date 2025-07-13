@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, RefObject, useRef } from 'react'
+import { getStroke } from 'perfect-freehand'
 
 interface CanvasDrawingProps {
   canvasRef: RefObject<HTMLCanvasElement | null>
@@ -38,12 +39,14 @@ export function CanvasDrawing({
     }, 500)
   }
 
-  // 컴포넌트 언마운트 시 타임아웃 정리
+  // 컴포넌트 언마운트 시 타임아웃 정리 및 스크롤 락 해제
   useEffect(() => {
     return () => {
       if (recognitionTimeoutRef.current) {
         clearTimeout(recognitionTimeoutRef.current)
       }
+      // 컴포넌트 언마운트 시 스크롤 락 해제
+      unlockScroll()
     }
   }, [])
   
@@ -67,108 +70,195 @@ export function CanvasDrawing({
     ctx.globalAlpha = 1.0        // 완전 불투명
   }, [canvasRef])
 
-  // 마우스 드로잉 이벤트
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // 현재 스트로크 포인트 저장
+  const currentStrokePoints = useRef<Array<[number, number, number]>>([])
+  const isDrawingRef = useRef(false)
+
+  // 스크롤 락 함수들
+  const lockScroll = () => {
+    document.body.classList.add('no-scroll')
+    document.documentElement.classList.add('no-scroll')
+  }
+
+  const unlockScroll = () => {
+    document.body.classList.remove('no-scroll')
+    document.documentElement.classList.remove('no-scroll')
+  }
+
+  // Pointer 이벤트 처리 (터치펜, 마우스, 터치 통합)
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    // 필기 시작 시 스크롤 락
+    lockScroll()
+    
     const canvas = canvasRef.current
     if (!canvas) return
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+
+    isDrawingRef.current = true
+    currentStrokePoints.current = []
 
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
+    const pressure = e.pressure || 0.5
 
-    ctx.beginPath()
-    ctx.moveTo(x, y)
-    
-    // 마우스 이벤트 리스너 추가
-    const handleMouseMove = (e: MouseEvent) => {
+    // 첫 포인트 추가
+    currentStrokePoints.current.push([x, y, pressure])
+
+    // Pointer 이벤트 리스너 추가
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!isDrawingRef.current) return
+
+      e.preventDefault()
+      e.stopPropagation()
+
       const rect = canvas.getBoundingClientRect()
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
-      ctx.lineTo(x, y)
-      ctx.stroke()
+      const pressure = e.pressure || 0.5
+
+      // 포인트 추가
+      currentStrokePoints.current.push([x, y, pressure])
+
+      // Perfect Freehand로 부드러운 스트로크 생성
+      const stroke = getStroke(currentStrokePoints.current, {
+        size: 3,
+        thinning: 0.5,
+        smoothing: 0.5,
+        streamline: 0.5,
+        easing: (t) => t,
+        start: {
+          taper: 0,
+          easing: (t) => t,
+        },
+        end: {
+          taper: 0,
+          easing: (t) => t,
+        },
+      })
+
+      // 캔버스 다시 그리기 (현재 스트로크만)
+      redrawCanvas()
+      drawStroke(ctx, stroke)
     }
 
-    const handleMouseUp = () => {
-      canvas.removeEventListener('mousemove', handleMouseMove)
-      canvas.removeEventListener('mouseup', handleMouseUp)
-      canvas.removeEventListener('mouseleave', handleMouseUp)
+    const handlePointerUp = (e?: PointerEvent) => {
+      if (!isDrawingRef.current) return
+
+      if (e) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+
+      isDrawingRef.current = false
       
+      // 이벤트 리스너 제거
+      canvas.removeEventListener('pointermove', handlePointerMove)
+      canvas.removeEventListener('pointerup', handlePointerUp)
+      canvas.removeEventListener('pointercancel', handlePointerUp)
+      canvas.removeEventListener('pointerleave', handlePointerUp)
+
+      // 필기 종료 시 스크롤 락 해제
+      unlockScroll()
+
+      // 최종 스트로크 그리기
+      if (currentStrokePoints.current.length > 1) {
+        const stroke = getStroke(currentStrokePoints.current, {
+          size: 3,
+          thinning: 0.5,
+          smoothing: 0.5,
+          streamline: 0.5,
+          easing: (t) => t,
+          start: {
+            taper: 0,
+            easing: (t) => t,
+          },
+          end: {
+            taper: 0,
+            easing: (t) => t,
+          },
+        })
+
+        drawStroke(ctx, stroke)
+      }
+
       // 드로잉 완료 후 실시간 인식 트리거
       triggerRealTimeRecognition()
     }
 
-    canvas.addEventListener('mousemove', handleMouseMove)
-    canvas.addEventListener('mouseup', handleMouseUp)
-    canvas.addEventListener('mouseleave', handleMouseUp)
+    // 이벤트 리스너 등록 (passive: false로 preventDefault 활성화)
+    canvas.addEventListener('pointermove', handlePointerMove, { passive: false })
+    canvas.addEventListener('pointerup', handlePointerUp, { passive: false })
+    canvas.addEventListener('pointercancel', handlePointerUp, { passive: false })
+    canvas.addEventListener('pointerleave', handlePointerUp, { passive: false })
   }
 
-  // 터치 이벤트 처리 (모바일 지원)
-  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault()
-    const touch = e.touches[0]
-    const canvas = canvasRef.current
-    if (!canvas) return
+  // Perfect Freehand 스트로크를 캔버스에 그리기
+  const drawStroke = (ctx: CanvasRenderingContext2D, stroke: number[][]) => {
+    if (!stroke.length) return
 
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const rect = canvas.getBoundingClientRect()
-    const x = touch.clientX - rect.left
-    const y = touch.clientY - rect.top
-
+    ctx.fillStyle = '#000000'
     ctx.beginPath()
-    ctx.moveTo(x, y)
+
+    if (stroke.length === 1) {
+      // 단일 점인 경우
+      const [x, y] = stroke[0]
+      ctx.arc(x, y, 1, 0, 2 * Math.PI)
+    } else {
+      // 다중 점인 경우 폴리곤으로 그리기
+      ctx.moveTo(stroke[0][0], stroke[0][1])
+      for (let i = 1; i < stroke.length; i++) {
+        ctx.lineTo(stroke[i][0], stroke[i][1])
+      }
+      ctx.closePath()
+    }
+
+    ctx.fill()
   }
 
-  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault()
-    const touch = e.touches[0]
+  // 캔버스 다시 그리기 (기존 스트로크는 유지)
+  const redrawCanvas = () => {
     const canvas = canvasRef.current
     if (!canvas) return
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const rect = canvas.getBoundingClientRect()
-    const x = touch.clientX - rect.left
-    const y = touch.clientY - rect.top
-
-    ctx.lineTo(x, y)
-    ctx.stroke()
-  }
-
-  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault()
+    // 현재 이미지 데이터 백업
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
     
-    // 터치 완료 후 실시간 인식 트리거
-    triggerRealTimeRecognition()
+    // 캔버스 지우기
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    
+    // 이미지 데이터 복원 (기존 스트로크 유지)
+    ctx.putImageData(imageData, 0, 0)
   }
 
   return (
     <div className="space-y-4">
       {/* 캔버스 - 200x100px (실제 답안영역 크기) */}
-      <div className="border border-gray-300 rounded p-2 bg-gray-50">
+      <div className="border border-gray-300 rounded p-2 bg-gray-50 drawing-area">
         <div className="text-center mb-2">
           <span className="text-xs text-gray-600">
             답안 작성란 (200×100px)
           </span>
         </div>
-        <div className="flex justify-center">
+        <div className="flex justify-center canvas-container">
           <canvas
             ref={canvasRef}
             width={200}
             height={100}
             className="border border-gray-400 cursor-crosshair bg-white"
-            onMouseDown={startDrawing}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
+            onPointerDown={handlePointerDown}
             style={{ 
               touchAction: 'none',  // 터치 스크롤 방지
-              backgroundColor: 'transparent'  // 투명 배경
+              backgroundColor: 'transparent',  // 투명 배경
+              cursor: 'crosshair'
             }}
           />
         </div>
@@ -195,7 +285,8 @@ export function CanvasDrawing({
       {/* 사용법 안내 */}
       <div className="text-center text-xs text-gray-500">
         <p>💡 작은 답안란에 연속된 숫자를 써주세요</p>
-        <p>📝 실제 시험지처럼 얇은 선으로 작게 써도 인식됩니다</p>
+        <p>📝 스타일러스 펜 압력 감응으로 더 정확한 인식!</p>
+        <p>✨ 부드러운 필기감으로 자연스럽게 써보세요</p>
       </div>
     </div>
   )
