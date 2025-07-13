@@ -1,6 +1,13 @@
-# 🧮 초등학교 수학 학습 애플리케이션
+# 🧮 Elementary Math App
 
-Claude와 Cline을 활용하여 개발하는 **필기 인식 기반** 인터랙티브 초등학교 수학 학습 플랫폼입니다.
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![TensorFlow.js](https://img.shields.io/badge/TensorFlow.js-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+
+**AI-powered handwriting recognition system for elementary math learning**
+
+An interactive elementary math learning platform with real-time handwriting recognition using TensorFlow.js and advanced digit segmentation algorithms.
 
 ## 🎯 프로젝트 목표
 
@@ -192,24 +199,36 @@ npm list @tensorflow/tfjs
 - 👥 **클래스 관리**: 학급별 필기 학습 진도 관리
 - 📊 **통계 대시보드**: 전체 필기 인식 현황 모니터링
 
-## 👥 기여하기
+## 🤝 Contributing
 
-1. 이 저장소를 포크합니다
-2. 기능 브랜치를 생성합니다 (`git checkout -b feature/새기능`)
-3. 변경사항을 커밋합니다 (`git commit -am '새기능 추가'`)
-4. 브랜치에 푸시합니다 (`git push origin feature/새기능`)
-5. Pull Request를 생성합니다
+1. Fork this repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## 📞 연락처
+## � Issues
 
-- **개발자**: 김정민
-- **이메일**: [이메일 주소]
-- **프로젝트 링크**: [GitHub 저장소]
+Found a bug or have a feature request? Please open an issue [here](https://github.com/[username]/elementary-math-app/issues).
 
-## 📄 라이선스
+## 📄 License
 
-이 프로젝트는 MIT 라이선스 하에 배포됩니다.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [TensorFlow.js](https://www.tensorflow.org/js) for machine learning capabilities
+- [Next.js](https://nextjs.org/) for the amazing React framework
+- [Tailwind CSS](https://tailwindcss.com/) for beautiful styling
+- MNIST dataset for digit recognition training
+
+## 📊 Project Status
+
+![GitHub issues](https://img.shields.io/github/issues/[username]/elementary-math-app)
+![GitHub forks](https://img.shields.io/github/forks/[username]/elementary-math-app)
+![GitHub stars](https://img.shields.io/github/stars/[username]/elementary-math-app)
+![GitHub license](https://img.shields.io/github/license/[username]/elementary-math-app)
 
 ---
 
-**Created with ❤️ using Claude & Cline**
+**Made with ❤️ for elementary education**

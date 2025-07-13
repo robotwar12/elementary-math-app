@@ -1,110 +1,160 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Problem, ProblemCardProps } from '../types';
+import { DigitRecognizer } from './DigitRecognizer';
 
 export default function ProblemCard({ problem, number, onAnswerChange }: ProblemCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [context, setContext] = useState<CanvasRenderingContext2D | null>(null);
+  const digitRecognizer = useRef<DigitRecognizer>(new DigitRecognizer());
   const [recognizedNumber, setRecognizedNumber] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isModelLoading, setIsModelLoading] = useState(false);
 
-  useEffect(() => {
+  // AI 인식 함수
+  const handleRecognize = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    setIsProcessing(true);
+    
+    try {
+      // 모델 초기화 (최초 한 번)
+      setIsModelLoading(true);
+      await digitRecognizer.current.initializeWeights();
+      setIsModelLoading(false);
+
+      // 숫자 인식 실행
+      const recognizedDigits = await digitRecognizer.current.recognizeDigits(canvas);
+      const result = recognizedDigits.join('');
+      
+      console.log('🔢 인식 결과:', result);
+      setRecognizedNumber(result);
+      
+      // 부모 컴포넌트로 답안 전달
+      onAnswerChange(problem.id, result);
+      
+    } catch (error) {
+      console.error('❌ 인식 오류:', error);
+      setRecognizedNumber('오류');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // 캔버스 지우기
+  const handleClear = () => {
     const canvas = canvasRef.current;
     if (canvas) {
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.strokeStyle = '#4f46e5';
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        setContext(ctx);
-
-        // 캔버스 크기 설정
-        canvas.width = canvas.offsetWidth;
-        canvas.height = canvas.offsetHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
     }
-  }, []);
+    setRecognizedNumber('');
+    onAnswerChange(problem.id, '');
+  };
+
+  // 캔버스 드로잉 로직
+  const [isDrawing, setIsDrawing] = useState(false);
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    const rect = canvas?.getBoundingClientRect();
-    if (canvas && rect && context) {
-      setIsDrawing(true);
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      context.beginPath();
-      context.moveTo(x, y);
-    }
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setIsDrawing(true);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    
+    // 드로잉 스타일 설정
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !context) return;
-
+    if (!isDrawing) return;
+    
     const canvas = canvasRef.current;
-    const rect = canvas?.getBoundingClientRect();
-    if (canvas && rect) {
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      context.lineTo(x, y);
-      context.stroke();
-    }
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    ctx.lineTo(x, y);
+    ctx.stroke();
   };
 
   const stopDrawing = () => {
     setIsDrawing(false);
-    // 간단한 모의 숫자 인식 (실제로는 AI 모델을 사용)
+    // 드로잉 완료 후 500ms 후 자동 인식
     setTimeout(() => {
-      const mockRecognition = Math.floor(Math.random() * 1000);
-      const recognizedAnswer = mockRecognition.toString();
-      setRecognizedNumber(recognizedAnswer);
-      
-      // 부모 컴포넌트로 답안 전달
-      onAnswerChange(problem.id, recognizedAnswer);
+      handleRecognize();
     }, 500);
   };
 
-  const clearCanvas = () => {
+  // 터치 이벤트 (모바일 지원)
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const touch = e.touches[0];
     const canvas = canvasRef.current;
-    if (canvas && context) {
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      setRecognizedNumber('');
-      onAnswerChange(problem.id, '');
-    }
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+
+    setIsDrawing(true);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
   };
 
-  // 터치 이벤트 처리
-  const startDrawingTouch = (e: React.TouchEvent<HTMLCanvasElement>) => {
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
     e.preventDefault();
+    if (!isDrawing) return;
+    
+    const touch = e.touches[0];
     const canvas = canvasRef.current;
-    const rect = canvas?.getBoundingClientRect();
-    if (canvas && rect && context && e.touches[0]) {
-      setIsDrawing(true);
-      const x = e.touches[0].clientX - rect.left;
-      const y = e.touches[0].clientY - rect.top;
-      context.beginPath();
-      context.moveTo(x, y);
-    }
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+
+    ctx.lineTo(x, y);
+    ctx.stroke();
   };
 
-  const drawTouch = (e: React.TouchEvent<HTMLCanvasElement>) => {
+  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
     e.preventDefault();
-    if (!isDrawing || !context) return;
-
-    const canvas = canvasRef.current;
-    const rect = canvas?.getBoundingClientRect();
-    if (canvas && rect && e.touches[0]) {
-      const x = e.touches[0].clientX - rect.left;
-      const y = e.touches[0].clientY - rect.top;
-      context.lineTo(x, y);
-      context.stroke();
-    }
-  };
-
-  const stopDrawingTouch = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    stopDrawing();
+    setIsDrawing(false);
+    // 터치 완료 후 자동 인식
+    setTimeout(() => {
+      handleRecognize();
+    }, 500);
   };
 
   return (
@@ -113,7 +163,7 @@ export default function ProblemCard({ problem, number, onAnswerChange }: Problem
       <div style={{ 
         position: 'absolute', 
         top: '-10px', 
-        right: '-10px', 
+        left: '-10px', 
         width: '30px', 
         height: '30px', 
         backgroundColor: '#4f46e5', 
@@ -193,7 +243,7 @@ export default function ProblemCard({ problem, number, onAnswerChange }: Problem
             답을 써주세요
           </span>
           <button
-            onClick={clearCanvas}
+            onClick={handleClear}
             style={{
               padding: '0.5rem 1rem',
               backgroundColor: '#6b7280',
@@ -218,6 +268,8 @@ export default function ProblemCard({ problem, number, onAnswerChange }: Problem
         }}>
           <canvas
             ref={canvasRef}
+            width={200}
+            height={80}
             style={{ 
               width: '100%', 
               height: '80px', 
@@ -229,9 +281,9 @@ export default function ProblemCard({ problem, number, onAnswerChange }: Problem
             onMouseMove={draw}
             onMouseUp={stopDrawing}
             onMouseLeave={stopDrawing}
-            onTouchStart={startDrawingTouch}
-            onTouchMove={drawTouch}
-            onTouchEnd={stopDrawingTouch}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
           />
         </div>
       </div>

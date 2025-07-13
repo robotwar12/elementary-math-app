@@ -1,0 +1,23 @@
+# Dependencies
+node_modules
+
+# Build outputs
+.next
+out
+dist
+build
+
+# Environment files
+.env*
+
+# Config files
+*.config.js
+*.config.ts
+
+# Generated files
+coverage
+.turbo
+
+# Docs
+docs/memory-bank.md
+docs/activeContext.md

@@ -2,6 +2,7 @@
 node_modules/
 /.pnp
 .pnp.js
+.yarn/install-state.gz
 
 # Build outputs
 /.next/
@@ -14,6 +15,8 @@ node_modules/
 *.seed
 *.log
 logs/
+pids/
+lib-cov/
 
 # Environment variables
 .env
@@ -21,14 +24,25 @@ logs/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.development
+.env.test
+.env.production
 
-# IDE
+# IDE & Editors
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.sublime-project
 
-# OS
+# OS generated files
 .DS_Store
 .DS_Store?
 ._*
@@ -36,13 +50,60 @@ logs/
 .Trashes
 ehthumbs.db
 Thumbs.db
+Icon?
+.LSOverride
+$RECYCLE.BIN/
+Desktop.ini
 
 # Testing
 coverage/
 .nyc_output/
+.jest/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel
+
+# Turbo
+.turbo
+
+# Local development
+.next/cache/
+.next/trace
+.next/static/webpack/
 
 # Misc
-*.tsbuildinfo
+*.tgz
+*.tar.gz
+.cache/
+.parcel-cache/
+.sass-cache/
 
 # 모델 파일 (용량이 큰 가중치 데이터)
 public/models/*.json
+public/models/*.bin
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# PWA files
+**/public/sw.js
+**/public/workbox-*.js
+**/public/worker-*.js
+**/public/sw.js.map
+**/public/workbox-*.js.map
+**/public/worker-*.js.map
+
+# Storybook
+.out
+.storybook-out
+
+# Temporary folders
+tmp/
+temp/

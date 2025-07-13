@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Problem, ProblemResult } from '../types';
 import ProblemCard from './ProblemCard';
 import ScoreResult from './ScoreResult';
-import SettingsPanel from './SettingsPanel';
+import SettingsPage from './SettingsPage';
 
 export default function MathPractice() {
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -12,7 +12,7 @@ export default function MathPractice() {
   const [userAnswers, setUserAnswers] = useState<{[key: number]: string}>({});
   const [isGraded, setIsGraded] = useState(false);
   const [results, setResults] = useState<ProblemResult[]>([]);
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettingsPage, setShowSettingsPage] = useState(false);
   const [firstNumberDigits, setFirstNumberDigits] = useState(2);
   const [secondNumberDigits, setSecondNumberDigits] = useState(2);
   const [totalPagesCount, setTotalPagesCount] = useState(3);
@@ -100,6 +100,21 @@ export default function MathPractice() {
     }
   };
 
+  // 설정 페이지
+  if (showSettingsPage) {
+    return (
+      <SettingsPage
+        firstNumberDigits={firstNumberDigits}
+        secondNumberDigits={secondNumberDigits}
+        totalPagesCount={totalPagesCount}
+        onFirstNumberDigitsChange={setFirstNumberDigits}
+        onSecondNumberDigitsChange={setSecondNumberDigits}
+        onTotalPagesCountChange={setTotalPagesCount}
+        onGoBack={() => setShowSettingsPage(false)}
+      />
+    );
+  }
+
   // 채점 결과 화면
   if (isGraded) {
     return (
@@ -124,10 +139,10 @@ export default function MathPractice() {
               <p>필기로 답을 써보며 수학 실력을 키워보세요</p>
             </div>
             <button
-              onClick={() => setShowSettings(!showSettings)}
+              onClick={() => setShowSettingsPage(true)}
               style={{
                 padding: '0.75rem 1.5rem',
-                backgroundColor: showSettings ? '#10b981' : '#6b7280',
+                backgroundColor: '#6b7280',
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
@@ -143,17 +158,6 @@ export default function MathPractice() {
               설정
             </button>
           </div>
-
-          <SettingsPanel 
-            showSettings={showSettings}
-            firstNumberDigits={firstNumberDigits}
-            secondNumberDigits={secondNumberDigits}
-            totalPagesCount={totalPagesCount}
-            onFirstNumberDigitsChange={setFirstNumberDigits}
-            onSecondNumberDigitsChange={setSecondNumberDigits}
-            onTotalPagesCountChange={setTotalPagesCount}
-            onToggleSettings={() => setShowSettings(!showSettings)}
-          />
         </div>
 
         <div className="problem-grid">
