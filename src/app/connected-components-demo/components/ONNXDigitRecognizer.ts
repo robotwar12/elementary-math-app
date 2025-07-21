@@ -111,19 +111,28 @@ export class ONNXDigitRecognizer {
     const data = imageData.data;
     const grayscaleData = new Float32Array(canvas.width * canvas.height);
     
+    // 그레이스케일 변환 (이진화 없이)
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
       // 그레이스케일 변환 후 정규화 (0: 검은색, 1: 흰색)
       const gray = (r * 0.299 + g * 0.587 + b * 0.114) / 255.0;
-      
-      // 임계값 처리로 선명하게 (0.5를 기준으로 이진화)
-      const binaryValue = gray < 0.5 ? 1.0 : 0.0;
-      grayscaleData[i / 4] = binaryValue; // MNIST는 검은 배경에 흰 글씨
+      grayscaleData[i / 4] = 1.0 - gray; // MNIST는 검은 배경에 흰 글씨 (반전)
     }
     
-    return grayscaleData;
+    // 가우시안 블러 적용으로 선 두께 증가
+    const blurredData = this.gaussianBlur(grayscaleData, canvas.width, canvas.height);
+    
+    // 블러 후 이진화 적용
+    for (let i = 0; i < blurredData.length; i++) {
+      blurredData[i] = blurredData[i] > 0.2 ? 1.0 : 0.0; // 더욱 관대한 임계값
+    }
+    
+    // 형태학적 팽창 연산으로 선 두께 더욱 증가
+    const dilatedData = this.dilate(blurredData, canvas.width, canvas.height);
+    
+    return dilatedData;
   }
 
   private resizeKeepingAspectRatio(data: Float32Array, srcWidth: number, srcHeight: number, 
@@ -148,8 +157,8 @@ export class ONNXDigitRecognizer {
     newWidth = Math.max(1, newWidth);
     newHeight = Math.max(1, newHeight);
     
-    // 선명함을 위해 nearest neighbor 리사이즈 사용
-    const resizedData = this.nearestNeighborResize(data, srcWidth, srcHeight, newWidth, newHeight);
+    // 부드러운 보간을 위해 bilinear 리사이즈 사용 (듬성듬성한 픽셀 문제 해결)
+    const resizedData = this.bilinearResize(data, srcWidth, srcHeight, newWidth, newHeight);
     
     return { resizedData, newWidth, newHeight };
   }
@@ -230,6 +239,71 @@ export class ONNXDigitRecognizer {
         if (targetX >= 0 && targetX < targetWidth && targetY >= 0 && targetY < targetHeight) {
           result[targetY * targetWidth + targetX] = data[y * srcWidth + x];
         }
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * 가우시안 블러 적용 (선 두께 증가)
+   */
+  private gaussianBlur(data: Float32Array, width: number, height: number): Float32Array {
+    const result = new Float32Array(data.length);
+    const kernel = [
+      [0.0625, 0.125, 0.0625],
+      [0.125,  0.25,  0.125],
+      [0.0625, 0.125, 0.0625]
+    ];
+    
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let sum = 0;
+        
+        for (let ky = -1; ky <= 1; ky++) {
+          for (let kx = -1; kx <= 1; kx++) {
+            const ny = y + ky;
+            const nx = x + kx;
+            
+            if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+              sum += data[ny * width + nx] * kernel[ky + 1][kx + 1];
+            }
+          }
+        }
+        
+        result[y * width + x] = sum;
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * 형태학적 팽창 연산 (선 두께 대폭 증가)
+   */
+  private dilate(data: Float32Array, width: number, height: number): Float32Array {
+    const result = new Float32Array(data.length);
+    const structuringElement = [
+      [-1, -1], [-1, 0], [-1, 1],
+      [0, -1],  [0, 0],  [0, 1],
+      [1, -1],  [1, 0],  [1, 1]
+    ];
+    
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let maxValue = 0;
+        
+        // 구조 요소 적용
+        for (const [dy, dx] of structuringElement) {
+          const ny = y + dy;
+          const nx = x + dx;
+          
+          if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+            maxValue = Math.max(maxValue, data[ny * width + nx]);
+          }
+        }
+        
+        result[y * width + x] = maxValue;
       }
     }
     
