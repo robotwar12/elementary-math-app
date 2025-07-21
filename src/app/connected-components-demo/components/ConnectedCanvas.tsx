@@ -13,6 +13,7 @@ interface ConnectedCanvasProps {
   autoAnalyze?: boolean
   canvasWidth?: number
   canvasHeight?: number
+  simplifiedUI?: boolean // 메인 페이지용 간소화된 UI
 }
 
 export function ConnectedCanvas({
@@ -22,7 +23,8 @@ export function ConnectedCanvas({
   onClear,
   autoAnalyze = true,
   canvasWidth = 400,
-  canvasHeight = 200
+  canvasHeight = 200,
+  simplifiedUI = false
 }: ConnectedCanvasProps) {
   
   const analyzerRef = useRef<ComponentAnalyzer>(new ComponentAnalyzer())
@@ -430,29 +432,35 @@ export function ConnectedCanvas({
           🗑️ 지우기
         </button>
         
-        <button
-          onClick={manualAnalyze}
-          disabled={isAnalyzing || isRecognizing}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 font-medium text-sm"
-        >
-          {isAnalyzing ? '⏳ 분석 중...' : isRecognizing ? '🤖 인식 중...' : '🔍 분석 + 인식'}
-        </button>
-        
-        <button
-          onClick={reapplyVisualization}
-          disabled={!lastAnalysisResult || isAnalyzing || isRecognizing}
-          className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 font-medium text-sm"
-        >
-          🎨 시각화 복원
-        </button>
+        {!simplifiedUI && (
+          <>
+            <button
+              onClick={manualAnalyze}
+              disabled={isAnalyzing || isRecognizing}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 font-medium text-sm"
+            >
+              {isAnalyzing ? '⏳ 분석 중...' : isRecognizing ? '🤖 인식 중...' : '🔍 분석 + 인식'}
+            </button>
+            
+            <button
+              onClick={reapplyVisualization}
+              disabled={!lastAnalysisResult || isAnalyzing || isRecognizing}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 font-medium text-sm"
+            >
+              🎨 시각화 복원
+            </button>
+          </>
+        )}
       </div>
       
       {/* 사용법 안내 */}
-      <div className="text-center text-xs text-gray-500 space-y-1">
-        <p>💡 숫자를 그려보세요. 스트로크 완료 시 자동으로 연결성분 분석과 ONNX 숫자 인식을 실행합니다.</p>
-        <p>🎨 각 연결성분은 서로 다른 색상의 경계선으로 표시됩니다.</p>
-        <p>🤖 ONNX 모델을 통해 실시간으로 숫자를 인식하고 신뢰도를 표시합니다.</p>
-      </div>
+      {!simplifiedUI && (
+        <div className="text-center text-xs text-gray-500 space-y-1">
+          <p>💡 숫자를 그려보세요. 스트로크 완료 시 자동으로 연결성분 분석과 ONNX 숫자 인식을 실행합니다.</p>
+          <p>🎨 각 연결성분은 서로 다른 색상의 경계선으로 표시됩니다.</p>
+          <p>🤖 ONNX 모델을 통해 실시간으로 숫자를 인식하고 신뢰도를 표시합니다.</p>
+        </div>
+      )}
     </div>
   )
 }
