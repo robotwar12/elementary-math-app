@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas 영역만 스크롤 방지</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #f8f9fa;
+            /* 페이지 전체는 자유롭게 스크롤 */
+            overflow-x: hidden;
+        }
+        
+        /* 헤더 - 스크롤 가능 */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2.5rem;
+        }
+        
+        .header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        /* 메인 콘텐츠 - 스크롤 가능 */
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        /* Canvas 섹션 */
+        .canvas-section {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            margin: 30px 0;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+        
+        .canvas-controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        /* Canvas 컨테이너 - 여기서만 스크롤 방지! */
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            border: 3px solid #e9ecef;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #fff;
+            
+            /* 핵심: Canvas 영역에서만 터치 동작 차단 */
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+        
+        /* 버튼 스타일 */
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,123,255,0.2);
+        }
+        
+        button:hover {
+            background: #0056b3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,123,255,0.3);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button.clear-btn {
+            background: #dc3545;
+        }
+        
+        button.clear-btn:hover {
+            background: #c82333;
+        }
+        
+        button.color-btn {
+            background: #28a745;
+        }
+        
+        button.color-btn:hover {
+            background: #218838;
+        }
+        
+        /* 상태 표시 */
+        .status-bar {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #495057;
+        }
+        
+        .status-item {
+            display: inline-block;
+            margin-right: 20px;
+            margin-bottom: 5px;
+        }
+        
+        .status-value {
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        /* 일반 콘텐츠 영역들 - 자유롭게 스크롤 */
+        .content-section {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 30px 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            line-height: 1.7;
+        }
+        
+        .scroll-demo {
+            height: 300px;
+            background: linear-gradient(45deg, #e3f2fd, #bbdefb);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            overflow-y: auto;
+            border: 2px solid #2196f3;
+        }
+        
+        .scroll-content {
+            height: 600px;
+            background: linear-gradient(to bottom, #fff3e0, #ffcc80);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #e65100;
+            font-weight: bold;
+        }
+        
+        /* 긴 페이지 콘텐츠 */
+        .long-section {
+            height: 400px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 12px;
+            margin: 30px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        /* 설명 박스 */
+        .info-box {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            color: #0c5460;
+        }
+        
+        .info-box h3 {
+            margin-top: 0;
+            color: #0c5460;
+        }
+        
+        /* 모바일 최적화 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .canvas-container {
+                height: 350px;
+            }
+            
+            .canvas-controls {
+                justify-content: center;
+            }
+            
+            button {
+                padding: 10px 16px;
+                font-size: 13px;
+            }
+            
+            .status-item {
+                display: block;
+                margin-right: 0;
+            }
+        }
+        
+        /* 스크롤바 스타일링 */
+        .scroll-demo::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .scroll-demo::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.5);
+            border-radius: 4px;
+        }
+        
+        .scroll-demo::-webkit-scrollbar-thumb {
+            background: #2196f3;
+            border-radius: 4px;
+        }
+        
+        .scroll-demo::-webkit-scrollbar-thumb:hover {
+            background: #1976d2;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>✏️ Canvas 스크롤 방지 시스템</h1>
+        <p>Canvas에서만 스크롤 방지, 다른 영역에서는 자유로운 스크롤</p>
+    </div>
+    
+    <div class="container">
+        <div class="info-box">
+            <h3>🎯 작동 방식</h3>
+            <p><strong>Canvas 영역:</strong> 터치펜/스타일러스로 필기할 때 스크롤이 완전히 방지됩니다.</p>
+            <p><strong>Canvas 외부:</strong> 일반적인 스크롤, 확대/축소, 모든 터치 제스처가 정상 작동합니다.</p>
+            <p><strong>모바일 최적화:</strong> 갤럭시 S펜, 서피스 펜, 아이패드 애플펜 완벽 지원!</p>
+        </div>
+        
+        <div class="canvas-section">
+            <div class="canvas-controls">
+                <button onclick="clearCanvas()" class="clear-btn">🗑️ 지우기</button>
+                <button onclick="changeColor()" class="color-btn">🎨 색상 변경</button>
+                <button onclick="changeBrushSize()">📏 굵기 변경</button>
+                <button onclick="downloadCanvas()">💾 다운로드</button>
+            </div>
+            
+            <div class="canvas-container" id="canvasContainer">
+                <canvas id="canvas"></canvas>
+            </div>
+            
+            <div class="status-bar">
+                <div class="status-item">입력 타입: <span class="status-value" id="inputType">-</span></div>
+                <div class="status-item">Pressure: <span class="status-value" id="pressure">0.000</span></div>
+                <div class="status-item">좌표: <span class="status-value" id="coordinates">0, 0</span></div>
+                <div class="status-item">색상: <span class="status-value" id="currentColor">#000000</span></div>
+                <div class="status-item">굵기: <span class="status-value" id="brushSize">2px</span></div>
+            </div>
+        </div>
+        
+        <div class="content-section">
+            <h2>📜 일반 스크롤 영역</h2>
+            <p>이 텍스트 영역에서는 일반적인 스크롤이 완벽하게 작동합니다. 마우스 휠이나 터치 제스처로 자유롭게 스크롤할 수 있습니다.</p>
+            <p>Canvas 밖에서는 모든 브라우저 기본 동작이 정상적으로 작동합니다:</p>
+            <ul>
+                <li>✅ 세로 스크롤 (위/아래)</li>
+                <li>✅ 가로 스크롤 (좌/우, 필요시)</li>
+                <li>✅ 확대/축소 (Pinch zoom)</li>
+                <li>✅ 텍스트 선택 및 복사</li>
+                <li>✅ 우클릭 컨텍스트 메뉴</li>
+                <li>✅ 드래그 앤 드롭</li>
+            </ul>
+        </div>
+        
+        <div class="scroll-demo">
+            <h3>🎢 내부 스크롤 테스트 영역</h3>
+            <p>이 박스는 자체 스크롤이 있습니다. 마음껏 스크롤해보세요!</p>
+            <div class="scroll-content">
+                <div>
+                    <h4>스크롤 콘텐츠 1</h4>
+                    <p>여기서 스크롤이 잘 작동하는지 확인해보세요.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="content-section">
+            <h2>⚙️ 기술적 구현</h2>
+            <p><strong>CSS 방식:</strong> Canvas 컨테이너에만 <code>touch-action: none</code> 적용</p>
+            <p><strong>JavaScript 방식:</strong> Canvas 영역에서만 <code>preventDefault()</code> 호출</p>
+            <p><strong>이벤트 전파:</strong> Canvas 외부에서는 기본 브라우저 동작 유지</p>
+            <p>이 방식은 가장 안정적이고 직관적인 사용자 경험을 제공합니다.</p>
+        </div>
+        
+        <div class="long-section">
+            <div>
+                <h2>📏 긴 콘텐츠 영역</h2>
+                <p>페이지 스크롤 테스트를 위한 긴 영역입니다.</p>
+                <p>Canvas 밖에서는 모든 스크롤이 자유롭게 작동합니다!</p>
+            </div>
+        </div>
+        
+        <div class="content-section">
+            <h2>🚀 사용 시나리오</h2>
+            <p><strong>디지털 노트 앱:</strong> 필기 영역에서는 스크롤 방지, 메뉴나 목록에서는 스크롤 허용</p>
+            <p><strong>그림 그리기 앱:</strong> Canvas에서만 방지, 도구 팔레트나 레이어 패널에서는 스크롤 가능</p>
+            <p><strong>서명 패드:</strong> 서명 영역에서만 방지, 문서의 나머지 부분은 스크롤 가능</p>
+            <p><strong>화이트보드 앱:</strong> 그리기 영역과 일반 UI 영역의 완벽한 분리</p>
+        </div>
+        
+        <div style="height: 300px; background: linear-gradient(45deg, #667eea, #764ba2); border-radius: 12px; margin: 30px 0; display: flex; align-items: center; justify-content: center; color: white; text-align: center;">
+            <div>
+                <h2>🎉 완벽한 스크롤 제어!</h2>
+                <p>Canvas에서는 방지, 다른 곳에서는 자유롭게!</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class CanvasOnlyScrollPrevention {
+            constructor(canvas, container) {
+                this.canvas = canvas;
+                this.container = container;
+                this.ctx = canvas.getContext('2d');
+                this.isDrawing = false;
+                this.lastPoint = { x: 0, y: 0 };
+                this.currentColor = '#000000';
+                this.brushSize = 2;
+                
+                // 색상과 브러시 크기 배열
+                this.colors = ['#000000', '#ff0000', '#0066cc', '#00cc66', '#ff6600', '#cc00cc', '#666666'];
+                this.brushSizes = [1, 2, 4, 6, 8, 12, 16];
+                this.currentColorIndex = 0;
+                this.currentSizeIndex = 1;
+                
+                this.setupCanvas();
+                this.bindEvents();
+            }
+            
+            setupCanvas() {
+                const rect = this.container.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                
+                // 고해상도 디스플레이 대응
+                this.canvas.width = rect.width * dpr;
+                this.canvas.height = rect.height * dpr;
+                this.canvas.style.width = '100%';
+                this.canvas.style.height = '100%';
+                
+                this.ctx.scale(dpr, dpr);
+                this.ctx.lineCap = 'round';
+                this.ctx.lineJoin = 'round';
+                this.ctx.imageSmoothingEnabled = true;
+            }
+            
+            bindEvents() {
+                // Pointer Events (최신 표준, 펜/터치/마우스 통합)
+                this.canvas.addEventListener('pointerdown', this.handleStart.bind(this));
+                this.canvas.addEventListener('pointermove', this.handleMove.bind(this));
+                this.canvas.addEventListener('pointerup', this.handleEnd.bind(this));
+                this.canvas.addEventListener('pointercancel', this.handleEnd.bind(this));
+                
+                // Canvas 영역에서만 터치 이벤트 차단
+                this.container.addEventListener('touchstart', this.preventTouch.bind(this), { passive: false });
+                this.container.addEventListener('touchmove', this.preventTouch.bind(this), { passive: false });
+                this.container.addEventListener('touchend', this.preventTouch.bind(this), { passive: false });
+                this.container.addEventListener('touchcancel', this.preventTouch.bind(this), { passive: false });
+                
+                // Canvas 영역에서만 휠 이벤트 차단
+                this.container.addEventListener('wheel', this.preventWheel.bind(this), { passive: false });
+                
+                // 컨텍스트 메뉴 방지 (Canvas에서만)
+                this.container.addEventListener('contextmenu', this.preventContext.bind(this));
+                
+                // 드래그 방지 (Canvas에서만)
+                this.container.addEventListener('dragstart', this.preventDrag.bind(this));
+            }
+            
+            // Canvas 영역에서만 터치 이벤트 차단
+            preventTouch(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Canvas 영역에서만 휠 이벤트 차단
+            preventWheel(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Canvas 영역에서만 컨텍스트 메뉴 차단
+            preventContext(e) {
+                e.preventDefault();
+                return false;
+            }
+            
+            // Canvas 영역에서만 드래그 차단
+            preventDrag(e) {
+                e.preventDefault();
+                return false;
+            }
+            
+            getCanvasPoint(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                return {
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top,
+                    pressure: e.pressure || 0.5
+                };
+            }
+            
+            handleStart(e) {
+                // Canvas 영역에서 그리기 시작
+                this.isDrawing = true;
+                const point = this.getCanvasPoint(e);
+                this.lastPoint = point;
+                
+                // 상태 업데이트
+                this.updateStatus(e, point);
+                
+                // 시작점 그리기
+                this.drawDot(point);
+            }
+            
+            handleMove(e) {
+                if (!this.isDrawing) return;
+                
+                const point = this.getCanvasPoint(e);
+                this.drawLine(this.lastPoint, point);
+                this.lastPoint = point;
+                
+                // 상태 업데이트
+                this.updateStatus(e, point);
+            }
+            
+            handleEnd(e) {
+                this.isDrawing = false;
+            }
+            
+            drawDot(point) {
+                this.ctx.fillStyle = this.currentColor;
+                this.ctx.beginPath();
+                this.ctx.arc(point.x, point.y, this.brushSize / 2, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+            
+            drawLine(from, to) {
+                this.ctx.strokeStyle = this.currentColor;
+                this.ctx.lineWidth = this.brushSize + (to.pressure * 3);
+                this.ctx.globalCompositeOperation = 'source-over';
+                
+                this.ctx.beginPath();
+                this.ctx.moveTo(from.x, from.y);
+                this.ctx.lineTo(to.x, to.y);
+                this.ctx.stroke();
+            }
+            
+            updateStatus(e, point) {
+                document.getElementById('inputType').textContent = e.pointerType || 'mouse';
+                document.getElementById('pressure').textContent = point.pressure.toFixed(3);
+                document.getElementById('coordinates').textContent = `${Math.round(point.x)}, ${Math.round(point.y)}`;
+            }
+            
+            clear() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            }
+            
+            changeColor() {
+                this.currentColorIndex = (this.currentColorIndex + 1) % this.colors.length;
+                this.currentColor = this.colors[this.currentColorIndex];
+                document.getElementById('currentColor').textContent = this.currentColor;
+            }
+            
+            changeBrushSize() {
+                this.currentSizeIndex = (this.currentSizeIndex + 1) % this.brushSizes.length;
+                this.brushSize = this.brushSizes[this.currentSizeIndex];
+                document.getElementById('brushSize').textContent = this.brushSize + 'px';
+            }
+            
+            downloadCanvas() {
+                const link = document.createElement('a');
+                link.download = 'drawing.png';
+                link.href = this.canvas.toDataURL();
+                link.click();
+            }
+        }
+        
+        // 초기화
+        const canvas = document.getElementById('canvas');
+        const container = document.getElementById('canvasContainer');
+        const drawing = new CanvasOnlyScrollPrevention(canvas, container);
+        
+        // 전역 함수들
+        function clearCanvas() {
+            drawing.clear();
+        }
+        
+        function changeColor() {
+            drawing.changeColor();
+        }
+        
+        function changeBrushSize() {
+            drawing.changeBrushSize();
+        }
+        
+        function downloadCanvas() {
+            drawing.downloadCanvas();
+        }
+        
+        // 페이지 로드 시 초기화
+        window.addEventListener('load', () => {
+            document.getElementById('currentColor').textContent = '#000000';
+            document.getElementById('brushSize').textContent = '2px';
+        });
+        
+        // 뷰포트 변경 시 캔버스 재조정
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                drawing.setupCanvas();
+            }, 300);
+        });
+        
+        // 페이지 전체에서는 부드러운 스크롤 유지
+        document.addEventListener('wheel', (e) => {
+            // Canvas 영역이 아닌 곳에서는 부드러운 스크롤
+            if (!e.target.closest('.canvas-container')) {
+                // 기본 스크롤 동작 유지 (preventDefault 하지 않음)
+            }
+        });
+    </script>
+</body>
+</html>

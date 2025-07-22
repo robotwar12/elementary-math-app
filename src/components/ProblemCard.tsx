@@ -231,18 +231,6 @@ export default function ProblemCardV2({ problem, number, onAnswerChange }: Probl
         )}
       </div>
 
-      {/* 기술 정보 (작은 크기) */}
-      <div style={{ 
-        marginTop: '0.75rem',
-        padding: '0.5rem',
-        backgroundColor: '#f1f5f9',
-        borderRadius: '4px',
-        fontSize: '0.7rem',
-        color: '#64748b',
-        textAlign: 'center'
-      }}>
-        🔬 Union-Find + ONNX Runtime Web + Perfect Freehand
-      </div>
     </div>
   );
 }

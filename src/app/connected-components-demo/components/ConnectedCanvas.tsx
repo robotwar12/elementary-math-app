@@ -30,6 +30,7 @@ export function ConnectedCanvas({
   const analyzerRef = useRef<ComponentAnalyzer>(new ComponentAnalyzer())
   const recognizerRef = useRef<ONNXDigitRecognizer>(new ONNXDigitRecognizer())
   const analysisTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isRecognizing, setIsRecognizing] = useState(false)
   const [lastAnalysisResult, setLastAnalysisResult] = useState<AnalysisResult | null>(null)
@@ -162,13 +163,38 @@ export function ConnectedCanvas({
     }
   }
 
+  // Canvas 컨테이너에 이벤트 리스너 추가 (demo 방식)
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    // Canvas 영역에서만 터치/스크롤 이벤트 차단
+    container.addEventListener('touchstart', preventTouch, { passive: false })
+    container.addEventListener('touchmove', preventTouch, { passive: false })
+    container.addEventListener('touchend', preventTouch, { passive: false })
+    container.addEventListener('touchcancel', preventTouch, { passive: false })
+    container.addEventListener('wheel', preventWheel, { passive: false })
+    container.addEventListener('contextmenu', preventContext)
+    container.addEventListener('dragstart', preventDrag)
+
+    return () => {
+      // 정리
+      container.removeEventListener('touchstart', preventTouch)
+      container.removeEventListener('touchmove', preventTouch)
+      container.removeEventListener('touchend', preventTouch)
+      container.removeEventListener('touchcancel', preventTouch)
+      container.removeEventListener('wheel', preventWheel)
+      container.removeEventListener('contextmenu', preventContext)
+      container.removeEventListener('dragstart', preventDrag)
+    }
+  }, [])
+
   // 컴포넌트 언마운트 시 정리
   useEffect(() => {
     return () => {
       if (analysisTimeoutRef.current) {
         clearTimeout(analysisTimeoutRef.current)
       }
-      unlockScroll()
     }
   }, [])
   
@@ -202,15 +228,27 @@ export function ConnectedCanvas({
   // 모든 스트로크 데이터 보관 (시각화와 분리)
   const allStrokes = useRef<Array<Array<[number, number, number]>>>([])
 
-  // 스크롤 락 함수들
-  const lockScroll = () => {
-    document.body.classList.add('no-scroll')
-    document.documentElement.classList.add('no-scroll')
+  // Canvas 영역에서만 터치/스크롤 이벤트 차단 (demo 방식 적용)
+  const preventTouch = (e: TouchEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    return false
   }
 
-  const unlockScroll = () => {
-    document.body.classList.remove('no-scroll')
-    document.documentElement.classList.remove('no-scroll')
+  const preventWheel = (e: WheelEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    return false
+  }
+
+  const preventContext = (e: Event) => {
+    e.preventDefault()
+    return false
+  }
+
+  const preventDrag = (e: DragEvent) => {
+    e.preventDefault()
+    return false
   }
 
   // 시각화 재적용 (캔버스 다시 그리기 후)
@@ -275,12 +313,10 @@ export function ConnectedCanvas({
     })
   }
 
-  // Pointer 이벤트 처리
+  // Pointer 이벤트 처리 (demo 방식 적용)
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault()
     e.stopPropagation()
-    
-    lockScroll()
     
     const canvas = canvasRef.current
     if (!canvas) return
@@ -311,12 +347,13 @@ export function ConnectedCanvas({
 
       currentStrokePoints.current.push([x, y, pressure])
 
-      // Perfect Freehand로 부드러운 스트로크 생성 - 인식률 향상 최적화
+      // Perfect Freehand로 부드러운 스트로크 생성 - 압력 감응 브러시
+      const dynamicBrushSize = 4 + (pressure * 2) // 압력에 따른 동적 크기
       const stroke = getStroke(currentStrokePoints.current, {
-        size: 4,        // 3 → 4로 증가 (더 두꺼운 스트로크)
-        thinning: 0.2,  // 0.5 → 0.2로 감소 (일정한 두께 유지)
-        smoothing: 0.3, // 0.5 → 0.3으로 감소 (더 선명한 경계)
-        streamline: 0.3, // 0.5 → 0.3으로 감소 (입력 충실도 향상)
+        size: dynamicBrushSize,
+        thinning: 0.2,  // 일정한 두께 유지
+        smoothing: 0.3, // 더 선명한 경계
+        streamline: 0.3, // 입력 충실도 향상
         easing: (t) => t,
         start: { taper: 0, easing: (t) => t },
         end: { taper: 0, easing: (t) => t },
@@ -342,15 +379,15 @@ export function ConnectedCanvas({
       canvas.removeEventListener('pointercancel', handlePointerUp)
       canvas.removeEventListener('pointerleave', handlePointerUp)
 
-      unlockScroll()
-
-      // 최종 스트로크 그리기 및 저장 - 인식률 향상 최적화
+      // 최종 스트로크 그리기 및 저장 - 압력 감응 브러시
       if (currentStrokePoints.current.length > 1) {
+        const finalPressure = currentStrokePoints.current[currentStrokePoints.current.length - 1][2]
+        const dynamicBrushSize = 4 + (finalPressure * 2)
         const stroke = getStroke(currentStrokePoints.current, {
-          size: 4,        // 3 → 4로 증가 (더 두꺼운 스트로크)
-          thinning: 0.2,  // 0.5 → 0.2로 감소 (일정한 두께 유지)
-          smoothing: 0.3, // 0.5 → 0.3으로 감소 (더 선명한 경계)
-          streamline: 0.3, // 0.5 → 0.3으로 감소 (입력 충실도 향상)
+          size: dynamicBrushSize,
+          thinning: 0.2,  // 일정한 두께 유지
+          smoothing: 0.3, // 더 선명한 경계
+          streamline: 0.3, // 입력 충실도 향상
           easing: (t) => t,
           start: { taper: 0, easing: (t) => t },
           end: { taper: 0, easing: (t) => t },
@@ -394,20 +431,24 @@ export function ConnectedCanvas({
     <div className="space-y-4">
       {/* 캔버스 영역 */}
       <div className="border border-gray-300 rounded p-4 bg-gray-50">
-        <div className="text-center mb-3">
-          <span className="text-sm font-medium text-gray-700">
-            연결성분 분석 + ONNX 인식 캔버스 ({canvasWidth}×{canvasHeight}px)
-          </span>
-          {(isAnalyzing || isRecognizing) && (
-            <div className="mt-1">
-              <span className="text-xs text-blue-600 animate-pulse">
-                {isAnalyzing ? '🔍 분석 중...' : '🤖 인식 중...'}
-              </span>
-            </div>
-          )}
-        </div>
+        {(isAnalyzing || isRecognizing) && (
+          <div className="text-center mb-3">
+            <span className="text-xs text-blue-600 animate-pulse">
+              {isAnalyzing ? '🔍 분석 중...' : '🤖 인식 중...'}
+            </span>
+          </div>
+        )}
         
-        <div className="flex justify-center">
+        <div 
+          className="flex justify-center"
+          ref={containerRef}
+          style={{
+            touchAction: 'none',           // Canvas 영역에서만 터치 액션 제한
+            userSelect: 'none',            // 텍스트 선택 방지
+            WebkitUserSelect: 'none',      // Safari 호환성
+            WebkitTouchCallout: 'none'     // iOS 호환성
+          }}
+        >
           <canvas
             ref={canvasRef}
             width={canvasWidth}
@@ -415,7 +456,6 @@ export function ConnectedCanvas({
             className="border-2 border-gray-400 cursor-crosshair bg-white rounded shadow-sm"
             onPointerDown={handlePointerDown}
             style={{ 
-              touchAction: 'none',
               backgroundColor: 'white',
             }}
           />

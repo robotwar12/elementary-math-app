@@ -22,6 +22,7 @@ export function CanvasDrawing({
 }: CanvasDrawingProps) {
   
   const recognitionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   // 실시간 인식 함수 (디바운스 적용)
   const triggerRealTimeRecognition = () => {
@@ -39,14 +40,38 @@ export function CanvasDrawing({
     }, 500)
   }
 
-  // 컴포넌트 언마운트 시 타임아웃 정리 및 스크롤 락 해제
+  // Canvas 컨테이너에 이벤트 리스너 추가 (demo 방식)
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    // Canvas 영역에서만 터치/스크롤 이벤트 차단
+    container.addEventListener('touchstart', preventTouch, { passive: false })
+    container.addEventListener('touchmove', preventTouch, { passive: false })
+    container.addEventListener('touchend', preventTouch, { passive: false })
+    container.addEventListener('touchcancel', preventTouch, { passive: false })
+    container.addEventListener('wheel', preventWheel, { passive: false })
+    container.addEventListener('contextmenu', preventContext)
+    container.addEventListener('dragstart', preventDrag)
+
+    return () => {
+      // 정리
+      container.removeEventListener('touchstart', preventTouch)
+      container.removeEventListener('touchmove', preventTouch)
+      container.removeEventListener('touchend', preventTouch)
+      container.removeEventListener('touchcancel', preventTouch)
+      container.removeEventListener('wheel', preventWheel)
+      container.removeEventListener('contextmenu', preventContext)
+      container.removeEventListener('dragstart', preventDrag)
+    }
+  }, [])
+
+  // 컴포넌트 언마운트 시 타임아웃 정리
   useEffect(() => {
     return () => {
       if (recognitionTimeoutRef.current) {
         clearTimeout(recognitionTimeoutRef.current)
       }
-      // 컴포넌트 언마운트 시 스크롤 락 해제
-      unlockScroll()
     }
   }, [])
   
@@ -74,24 +99,33 @@ export function CanvasDrawing({
   const currentStrokePoints = useRef<Array<[number, number, number]>>([])
   const isDrawingRef = useRef(false)
 
-  // 스크롤 락 함수들
-  const lockScroll = () => {
-    document.body.classList.add('no-scroll')
-    document.documentElement.classList.add('no-scroll')
+  // Canvas 영역에서만 터치/스크롤 이벤트 차단 (demo 방식 적용)
+  const preventTouch = (e: TouchEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    return false
   }
 
-  const unlockScroll = () => {
-    document.body.classList.remove('no-scroll')
-    document.documentElement.classList.remove('no-scroll')
+  const preventWheel = (e: WheelEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    return false
   }
 
-  // Pointer 이벤트 처리 (터치펜, 마우스, 터치 통합)
+  const preventContext = (e: Event) => {
+    e.preventDefault()
+    return false
+  }
+
+  const preventDrag = (e: DragEvent) => {
+    e.preventDefault()
+    return false
+  }
+
+  // Pointer 이벤트 처리 (터치펜, 마우스, 터치 통합) - demo 방식 적용
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault()
     e.stopPropagation()
-    
-    // 필기 시작 시 스크롤 락
-    lockScroll()
     
     const canvas = canvasRef.current
     if (!canvas) return
@@ -125,9 +159,10 @@ export function CanvasDrawing({
       // 포인트 추가
       currentStrokePoints.current.push([x, y, pressure])
 
-      // Perfect Freehand로 부드러운 스트로크 생성
+      // Perfect Freehand로 부드러운 스트로크 생성 - 압력 감응 브러시
+      const dynamicBrushSize = 3 + (pressure * 2) // 압력에 따른 동적 크기
       const stroke = getStroke(currentStrokePoints.current, {
-        size: 3,
+        size: dynamicBrushSize,
         thinning: 0.5,
         smoothing: 0.5,
         streamline: 0.5,
@@ -163,13 +198,12 @@ export function CanvasDrawing({
       canvas.removeEventListener('pointercancel', handlePointerUp)
       canvas.removeEventListener('pointerleave', handlePointerUp)
 
-      // 필기 종료 시 스크롤 락 해제
-      unlockScroll()
-
-      // 최종 스트로크 그리기
+      // 최종 스트로크 그리기 - 압력 감응 브러시
       if (currentStrokePoints.current.length > 1) {
+        const finalPressure = currentStrokePoints.current[currentStrokePoints.current.length - 1][2]
+        const dynamicBrushSize = 3 + (finalPressure * 2)
         const stroke = getStroke(currentStrokePoints.current, {
-          size: 3,
+          size: dynamicBrushSize,
           thinning: 0.5,
           smoothing: 0.5,
           streamline: 0.5,
@@ -248,7 +282,16 @@ export function CanvasDrawing({
             답안 작성란 (200×100px)
           </span>
         </div>
-        <div className="flex justify-center canvas-container">
+        <div 
+          className="flex justify-center canvas-container"
+          ref={containerRef}
+          style={{
+            touchAction: 'none',           // Canvas 영역에서만 터치 액션 제한
+            userSelect: 'none',            // 텍스트 선택 방지
+            WebkitUserSelect: 'none',      // Safari 호환성
+            WebkitTouchCallout: 'none'     // iOS 호환성
+          }}
+        >
           <canvas
             ref={canvasRef}
             width={200}
@@ -256,7 +299,6 @@ export function CanvasDrawing({
             className="border border-gray-400 cursor-crosshair bg-white"
             onPointerDown={handlePointerDown}
             style={{ 
-              touchAction: 'none',  // 터치 스크롤 방지
               backgroundColor: 'transparent',  // 투명 배경
               cursor: 'crosshair'
             }}

@@ -17,12 +17,6 @@ body {
   color: #333;
 }
 
-/* 터치펜 필기 시 스크롤 방지 */
-.no-scroll {
-  overflow: hidden !important;
-  touch-action: none !important;
-  -webkit-overflow-scrolling: auto !important;
-}
 
 /* 캔버스 컨테이너 터치 최적화 */
 .canvas-container {
