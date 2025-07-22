@@ -33,8 +33,6 @@ export default function RootLayout({
           `
         }} />
         
-        <script src="https://cdn.jsdelivr.net/npm/onnxjs/dist/onnx.min.js"></script>
-        <script src="/stroke-digit-recognizer.js"></script>
       </head>
       <body className={inter.className}>{children}</body>
     </html>
