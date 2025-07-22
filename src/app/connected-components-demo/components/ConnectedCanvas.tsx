@@ -313,7 +313,19 @@ export function ConnectedCanvas({
     })
   }
 
-  // Pointer 이벤트 처리 (demo 방식 적용)
+  // 좌표 변환 함수 (표시 크기 → 실제 크기)
+  const getScaledCoordinates = (clientX: number, clientY: number, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    }
+  }
+
+  // Pointer 이벤트 처리 (demo 방식 적용) - 좌표 변환 추가
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault()
     e.stopPropagation()
@@ -327,12 +339,11 @@ export function ConnectedCanvas({
     isDrawingRef.current = true
     currentStrokePoints.current = []
 
-    const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    // 좌표 변환 적용
+    const scaledCoords = getScaledCoordinates(e.clientX, e.clientY, canvas)
     const pressure = e.pressure || 0.5
 
-    currentStrokePoints.current.push([x, y, pressure])
+    currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
 
     const handlePointerMove = (e: PointerEvent) => {
       if (!isDrawingRef.current) return
@@ -340,12 +351,11 @@ export function ConnectedCanvas({
       e.preventDefault()
       e.stopPropagation()
 
-      const rect = canvas.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
+      // 좌표 변환 적용
+      const scaledCoords = getScaledCoordinates(e.clientX, e.clientY, canvas)
       const pressure = e.pressure || 0.5
 
-      currentStrokePoints.current.push([x, y, pressure])
+      currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
 
       // Perfect Freehand로 부드러운 스트로크 생성 - 압력 감응 브러시
       const dynamicBrushSize = 4 + (pressure * 2) // 압력에 따른 동적 크기
@@ -440,23 +450,27 @@ export function ConnectedCanvas({
         )}
         
         <div 
-          className="flex justify-center"
+          className="flex justify-center canvas-responsive-container"
           ref={containerRef}
           style={{
             touchAction: 'none',           // Canvas 영역에서만 터치 액션 제한
             userSelect: 'none',            // 텍스트 선택 방지
             WebkitUserSelect: 'none',      // Safari 호환성
-            WebkitTouchCallout: 'none'     // iOS 호환성
+            WebkitTouchCallout: 'none',    // iOS 호환성
+            maxWidth: '100%',              // 컨테이너 너비 제한
+            overflow: 'hidden'             // 넘치는 내용 숨김
           }}
         >
           <canvas
             ref={canvasRef}
             width={canvasWidth}
             height={canvasHeight}
-            className="border-2 border-gray-400 cursor-crosshair bg-white rounded shadow-sm"
+            className="border-2 border-gray-400 cursor-crosshair bg-white rounded shadow-sm canvas-responsive"
             onPointerDown={handlePointerDown}
             style={{ 
               backgroundColor: 'white',
+              maxWidth: '100%',             // 캔버스 최대 너비 제한
+              height: 'auto'                // 비율 유지
             }}
           />
         </div>

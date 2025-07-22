@@ -122,6 +122,18 @@ export function CanvasDrawing({
     return false
   }
 
+  // 좌표 변환 함수 (표시 크기 → 실제 크기)
+  const getScaledCoordinates = (clientX: number, clientY: number, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    }
+  }
+
   // Pointer 이벤트 처리 (터치펜, 마우스, 터치 통합) - demo 방식 적용
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault()
@@ -136,13 +148,12 @@ export function CanvasDrawing({
     isDrawingRef.current = true
     currentStrokePoints.current = []
 
-    const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    // 좌표 변환 적용
+    const scaledCoords = getScaledCoordinates(e.clientX, e.clientY, canvas)
     const pressure = e.pressure || 0.5
 
     // 첫 포인트 추가
-    currentStrokePoints.current.push([x, y, pressure])
+    currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
 
     // Pointer 이벤트 리스너 추가
     const handlePointerMove = (e: PointerEvent) => {
@@ -151,13 +162,12 @@ export function CanvasDrawing({
       e.preventDefault()
       e.stopPropagation()
 
-      const rect = canvas.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
+      // 좌표 변환 적용
+      const scaledCoords = getScaledCoordinates(e.clientX, e.clientY, canvas)
       const pressure = e.pressure || 0.5
 
       // 포인트 추가
-      currentStrokePoints.current.push([x, y, pressure])
+      currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
 
       // Perfect Freehand로 부드러운 스트로크 생성 - 압력 감응 브러시
       const dynamicBrushSize = 3 + (pressure * 2) // 압력에 따른 동적 크기
@@ -289,18 +299,22 @@ export function CanvasDrawing({
             touchAction: 'none',           // Canvas 영역에서만 터치 액션 제한
             userSelect: 'none',            // 텍스트 선택 방지
             WebkitUserSelect: 'none',      // Safari 호환성
-            WebkitTouchCallout: 'none'     // iOS 호환성
+            WebkitTouchCallout: 'none',    // iOS 호환성
+            maxWidth: '100%',              // 모바일 호환성
+            overflow: 'hidden'
           }}
         >
           <canvas
             ref={canvasRef}
             width={200}
             height={100}
-            className="border border-gray-400 cursor-crosshair bg-white"
+            className="border border-gray-400 cursor-crosshair bg-white canvas-responsive"
             onPointerDown={handlePointerDown}
             style={{ 
               backgroundColor: 'transparent',  // 투명 배경
-              cursor: 'crosshair'
+              cursor: 'crosshair',
+              maxWidth: '100%',               // 모바일에서 화면에 맞춤
+              height: 'auto'                  // 비율 유지
             }}
           />
         </div>

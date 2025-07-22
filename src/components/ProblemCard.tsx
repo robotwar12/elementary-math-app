@@ -15,6 +15,45 @@ export default function ProblemCardV2({ problem, number, onAnswerChange }: Probl
   const [lowConfidenceCount, setLowConfidenceCount] = useState<number>(0);
   const [recognitionTime, setRecognitionTime] = useState<number>(0);
   const [isRecognizing, setIsRecognizing] = useState<boolean>(false);
+  const [canvasSize, setCanvasSize] = useState({ width: 400, height: 120 });
+
+  // 화면 크기에 따른 캔버스 크기 계산 (실제 크기와 표시 크기 일치)
+  const calculateCanvasSize = () => {
+    if (typeof window === 'undefined') return { width: 400, height: 120 };
+    
+    const screenWidth = window.innerWidth;
+    if (screenWidth <= 400) {
+      // 모바일: 여백 40px 고려하여 최대 350px, 최소 280px
+      const width = Math.max(Math.min(screenWidth - 40, 350), 280);
+      // 비율 유지: 400:120 = 10:3
+      const height = Math.round(width * 0.3);
+      return { width, height };
+    } else if (screenWidth <= 768) {
+      // 태블릿: 조금 더 큰 캔버스
+      const width = 360;
+      const height = Math.round(width * 0.3); // 108px
+      return { width, height };
+    }
+    // 데스크톱: 기존 크기 유지
+    return { width: 400, height: 120 };
+  };
+
+  // 화면 크기 변경 감지
+  useEffect(() => {
+    const handleResize = () => {
+      setCanvasSize(calculateCanvasSize());
+    };
+
+    // 초기 크기 설정
+    handleResize();
+
+    // 리사이즈 이벤트 리스너 등록
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   const handleAnalysisComplete = (result: AnalysisResult) => {
     setAnalysisResult(result);
@@ -154,7 +193,8 @@ export default function ProblemCardV2({ problem, number, onAnswerChange }: Probl
           border: '2px dashed #93c5fd', 
           borderRadius: '8px', 
           backgroundColor: '#f0f9ff',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          maxWidth: '100%'
         }}>
           <ConnectedCanvas
             canvasRef={canvasRef}
@@ -162,8 +202,8 @@ export default function ProblemCardV2({ problem, number, onAnswerChange }: Probl
             onRecognitionComplete={handleRecognitionComplete}
             onClear={handleClear}
             autoAnalyze={true}
-            canvasWidth={400}
-            canvasHeight={120}
+            canvasWidth={canvasSize.width}
+            canvasHeight={canvasSize.height}
             simplifiedUI={true}
           />
         </div>

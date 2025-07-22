@@ -173,6 +173,37 @@ body {
   font-size: 1.2rem;
 }
 
+/* 캔버스 반응형 최적화 */
+.canvas-responsive-container {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.canvas-responsive {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 400px) {
+  .canvas-container, .canvas-responsive-container {
+    max-width: calc(100vw - 2rem);
+    overflow: hidden;
+    padding: 0;
+  }
+  
+  .canvas-responsive {
+    max-width: 100%;
+    width: auto;
+  }
+  
+  .problem-card {
+    padding: 1rem;
+    margin: 0.5rem;
+  }
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 1rem;
@@ -188,6 +219,7 @@ body {
   
   .problem-grid {
     grid-template-columns: 1fr;
+    gap: 1rem;
   }
   
   .pagination {
@@ -198,5 +230,10 @@ body {
   .pagination-button {
     width: 100%;
     justify-content: center;
+  }
+  
+  /* 모바일에서 캔버스 영역 최적화 */
+  .problem-card {
+    margin: 0.5rem 0;
   }
 }
