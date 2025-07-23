@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, RefObject, useRef } from 'react'
+import { useEffect, RefObject, useRef, useState } from 'react'
 import { getStroke } from 'perfect-freehand'
+import { usePalmRejection } from '../hooks/usePalmRejection'
+import { PalmRejectionStatus } from '../utils/palmRejection'
 
 interface CanvasDrawingProps {
   canvasRef: RefObject<HTMLCanvasElement | null>
@@ -10,6 +12,8 @@ interface CanvasDrawingProps {
   isProcessing: boolean
   isModelLoading: boolean
   realTimeRecognition?: boolean
+  palmRejection?: boolean
+  palmRejectionSensitivity?: 'low' | 'medium' | 'high'
 }
 
 export function CanvasDrawing({
@@ -18,11 +22,38 @@ export function CanvasDrawing({
   onClear,
   isProcessing,
   isModelLoading,
-  realTimeRecognition = true
+  realTimeRecognition = true,
+  palmRejection = true,
+  palmRejectionSensitivity = 'medium'
 }: CanvasDrawingProps) {
   
   const recognitionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const [palmRejectionStatus, setPalmRejectionStatus] = useState<PalmRejectionStatus | null>(null)
+
+  // Palm Rejection Hook 사용
+  const {
+    containerRef: palmContainerRef,
+    checkPointerInput,
+    addActivePointer,
+    removeActivePointer,
+    clearActivePointers,
+    updateConfig
+  } = usePalmRejection({
+    enabled: palmRejection,
+    config: {
+      penOnlyMode: palmRejection,
+      sensitivity: palmRejectionSensitivity
+    },
+    onStatusChange: setPalmRejectionStatus
+  })
+
+  // containerRef와 palmContainerRef 동기화
+  useEffect(() => {
+    if (containerRef.current) {
+      palmContainerRef.current = containerRef.current
+    }
+  }, [palmContainerRef])
 
   // 실시간 인식 함수 (디바운스 적용)
   const triggerRealTimeRecognition = () => {
