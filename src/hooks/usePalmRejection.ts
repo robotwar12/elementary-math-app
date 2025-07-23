@@ -25,15 +25,25 @@ export const usePalmRejection = ({
     event: PointerEvent | React.PointerEvent,
     existingTouches?: TouchList
   ): PalmRejectionStatus => {
+    console.log('🔍 usePalmRejection.checkPointerInput 호출됨:', {
+      enabled,
+      pointerType: event.pointerType,
+      pressure: event.pressure
+    });
+
     if (!enabled) {
-      return {
+      const status = {
         isAllowed: true,
         reason: 'Palm Rejection 비활성화됨',
-        inputType: 'unknown'
+        inputType: 'unknown' as const
       };
+      console.log('🔍 usePalmRejection 결과 (비활성화):', status);
+      return status;
     }
 
+    console.log('🔍 PalmRejectionManager.checkPointerInput 호출 중...');
     const status = managerRef.current.checkPointerInput(event, existingTouches);
+    console.log('🔍 PalmRejectionManager.checkPointerInput 결과:', status);
     
     if (onStatusChange) {
       onStatusChange(status);

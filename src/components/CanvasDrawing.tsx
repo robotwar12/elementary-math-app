@@ -90,8 +90,16 @@ export function CanvasDrawing({
   
   // 캔버스 초기 설정
   useEffect(() => {
+    console.log('🔍 CanvasDrawing 컴포넌트 마운트됨')
+    console.log('🔍 Palm Rejection 설정:', { palmRejection, palmRejectionSensitivity })
+    
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas) {
+      console.log('❌ 캔버스를 찾을 수 없음')
+      return
+    }
+
+    console.log('✅ 캔버스 찾음:', canvas)
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -106,7 +114,9 @@ export function CanvasDrawing({
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     ctx.globalAlpha = 1.0        // 완전 불투명
-  }, [canvasRef])
+    
+    console.log('✅ 캔버스 초기화 완료')
+  }, [canvasRef, palmRejection, palmRejectionSensitivity])
 
   // 현재 스트로크 포인트 저장
   const currentStrokePoints = useRef<Array<[number, number, number]>>([])
@@ -334,6 +344,8 @@ export function CanvasDrawing({
             height={100}
             className="border border-gray-400 cursor-crosshair bg-white canvas-responsive"
             onPointerDown={handlePointerDown}
+            onClick={() => console.log('🔍 Canvas 클릭됨!')}
+            onMouseDown={() => console.log('🔍 Canvas 마우스다운!')}
             style={{ 
               backgroundColor: 'transparent',  // 투명 배경
               cursor: 'crosshair',

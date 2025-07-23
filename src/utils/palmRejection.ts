@@ -41,16 +41,25 @@ export class PalmRejectionManager {
     event: PointerEvent | React.PointerEvent,
     existingTouches?: TouchList
   ): PalmRejectionStatus {
+    console.log('🔍 PalmRejectionManager.checkPointerInput 실행:', {
+      pointerType: event.pointerType,
+      pressure: event.pressure,
+      penOnlyMode: this.config.penOnlyMode,
+      sensitivity: this.config.sensitivity
+    });
+
     const inputType = this.getInputType(event);
     
     // 펜만 허용 모드가 꺼져있으면 모든 입력 허용
     if (!this.config.penOnlyMode) {
-      return {
+      const status = {
         isAllowed: true,
         reason: '모든 입력 허용 모드',
         inputType,
         pressure: event.pressure
       };
+      console.log('🔍 PalmRejectionManager 결과 (모든 입력 허용):', status);
+      return status;
     }
 
     // 멀티터치 감지 및 차단
@@ -76,12 +85,14 @@ export class PalmRejectionManager {
     }
 
     // 모든 검사 통과
-    return {
+    const status = {
       isAllowed: true,
       reason: `펜 입력 허용 (압력: ${event.pressure?.toFixed(2) || 'N/A'})`,
       inputType,
       pressure: event.pressure
     };
+    console.log('🔍 PalmRejectionManager 결과 (모든 검사 통과):', status);
+    return status;
   }
 
   // 터치 입력 검사 (TouchEvent용)
