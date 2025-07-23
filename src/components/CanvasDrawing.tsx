@@ -112,28 +112,6 @@ export function CanvasDrawing({
   const currentStrokePoints = useRef<Array<[number, number, number]>>([])
   const isDrawingRef = useRef(false)
 
-  // Canvas 영역에서만 터치/스크롤 이벤트 차단 (demo 방식 적용)
-  const preventTouch = (e: TouchEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    return false
-  }
-
-  const preventWheel = (e: WheelEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    return false
-  }
-
-  const preventContext = (e: Event) => {
-    e.preventDefault()
-    return false
-  }
-
-  const preventDrag = (e: DragEvent) => {
-    e.preventDefault()
-    return false
-  }
 
   // 좌표 변환 함수 (표시 크기 → 실제 크기)
   const getScaledCoordinates = (clientX: number, clientY: number, canvas: HTMLCanvasElement) => {
@@ -149,6 +127,8 @@ export function CanvasDrawing({
 
   // Pointer 이벤트 처리 (고급 Palm Rejection 적용)
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    console.log(`🔍 handlePointerDown 호출됨 - pointerType: ${e.pointerType}, pressure: ${e.pressure}`)
+    
     e.preventDefault()
     e.stopPropagation()
     
@@ -156,7 +136,10 @@ export function CanvasDrawing({
     if (!canvas) return
 
     // Palm Rejection 검사
+    console.log(`🔍 Palm Rejection 검사 시작...`)
     const rejectionStatus = checkPointerInput(e)
+    console.log(`🔍 Palm Rejection 결과:`, rejectionStatus)
+    
     if (!rejectionStatus.isAllowed) {
       console.log(`🚫 Palm Rejection: ${rejectionStatus.reason}`)
       return
