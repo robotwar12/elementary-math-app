@@ -5,16 +5,23 @@ import { getStroke } from 'perfect-freehand'
 import { ComponentAnalyzer, AnalysisResult, ConnectedComponent } from './ComponentAnalyzer'
 import { ONNXDigitRecognizer, RecognitionResult, ConnectedComponent as ONNXConnectedComponent } from './ONNXDigitRecognizer'
 
+// StrokeData 타입 정의 (타입 모듈과 동기화)
+interface StrokeData {
+  points: Array<[number, number, number]>; // [x, y, pressure]
+}
+
 interface ConnectedCanvasProps {
   canvasRef: RefObject<HTMLCanvasElement | null>
   onAnalysisComplete: (result: AnalysisResult) => void
   onRecognitionComplete?: (results: RecognitionResult[], processingTime: number) => void
   onClear: () => void
+  onCanvasDataChange?: (strokeData: StrokeData[]) => void // 드로잉 변경 시 콜백
   autoAnalyze?: boolean
   canvasWidth?: number
   canvasHeight?: number
   simplifiedUI?: boolean // 메인 페이지용 간소화된 UI
   palmRejection?: boolean // Palm Rejection 활성화 여부
+  initialCanvasData?: StrokeData[] // 초기 드로잉 데이터
 }
 
 export function ConnectedCanvas({
@@ -22,11 +29,13 @@ export function ConnectedCanvas({
   onAnalysisComplete,
   onRecognitionComplete,
   onClear,
+  onCanvasDataChange,
   autoAnalyze = true,
   canvasWidth = 400,
   canvasHeight = 200,
   simplifiedUI = false,
-  palmRejection = true
+  palmRejection = true,
+  initialCanvasData = []
 }: ConnectedCanvasProps) {
   
   const analyzerRef = useRef<ComponentAnalyzer>(new ComponentAnalyzer())
@@ -43,6 +52,50 @@ export function ConnectedCanvas({
       console.error('ONNX 모델 초기화 실패:', error)
     })
   }, [])
+
+  // 초기 캔버스 데이터 복원
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || initialCanvasData.length === 0) {
+      console.log(`📝 캔버스 복원 스킵: canvas=${!!canvas}, dataLength=${initialCanvasData.length}`)
+      return
+    }
+
+    console.log(`🔄 캔버스 복원 시작: ${initialCanvasData.length}개 스트로크`)
+    
+    // 기존 드로잉 데이터를 allStrokes에 복원
+    allStrokes.current = initialCanvasData.map(stroke => stroke.points)
+    
+    // 캔버스 준비 확인 후 복원 실행
+    const restoreCanvas = () => {
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        console.error('❌ 캔버스 컨텍스트를 가져올 수 없음')
+        return
+      }
+      
+      // 캔버스 지우고 다시 그리기
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      redrawCanvas()
+      
+      console.log(`✅ 캔버스 드로잉 복원 완료: ${initialCanvasData.length}개 스트로크`)
+      
+      // 복원 후 자동 분석 실행 (약간의 지연 후)
+      if (autoAnalyze) {
+        setTimeout(() => {
+          triggerAnalysis()
+        }, 200)
+      }
+    }
+    
+    // 캔버스 초기화 완료 후 복원 실행
+    if (canvas.width > 0 && canvas.height > 0) {
+      restoreCanvas()
+    } else {
+      // 캔버스가 아직 준비되지 않은 경우 조금 더 기다림
+      setTimeout(restoreCanvas, 150)
+    }
+  }, [initialCanvasData.length, canvasRef.current]) // 의존성 최적화
 
   // ConnectedComponent를 ONNX 형식으로 변환
   const convertToONNXComponents = (components: ConnectedComponent[]): ONNXConnectedComponent[] => {
@@ -427,6 +480,13 @@ export function ConnectedCanvas({
         
         // 스트로크 데이터 저장 (시각화와 분리)
         allStrokes.current.push([...currentStrokePoints.current])
+        
+        // ✅ 상위 컴포넌트에 드로잉 변경 알림 (누락되었던 부분)
+        if (onCanvasDataChange) {
+          const strokeData: StrokeData[] = allStrokes.current.map(stroke => ({ points: stroke }))
+          onCanvasDataChange(strokeData)
+          console.log(`💾 캔버스 데이터 저장: ${strokeData.length}개 스트로크`)
+        }
       }
 
       // 스트로크 완료 후 연결성분 분석 트리거
@@ -452,6 +512,11 @@ export function ConnectedCanvas({
     // 모든 스트로크 데이터 초기화
     allStrokes.current = []
     currentStrokePoints.current = []
+    
+    // 상위 컴포넌트에 드로잉 클리어 알림
+    if (onCanvasDataChange) {
+      onCanvasDataChange([])
+    }
     
     setLastAnalysisResult(null)
     onClear()

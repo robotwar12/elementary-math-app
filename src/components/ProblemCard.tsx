@@ -1,21 +1,30 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
-import { Problem, ProblemCardProps } from '../types';
+import { Problem, ProblemCardProps, StrokeData } from '../types';
 import { ConnectedCanvas } from '../app/connected-components-demo/components/ConnectedCanvas';
 import { AnalysisResult } from '../app/connected-components-demo/components/ComponentAnalyzer';
 import { RecognitionResult, ONNXDigitRecognizer } from '../app/connected-components-demo/components/ONNXDigitRecognizer';
 
-export default function ProblemCardV2({ problem, number, onAnswerChange, palmRejection = true }: ProblemCardProps) {
+export default function ProblemCardV2({ 
+  problem, 
+  number, 
+  onAnswerChange, 
+  onCanvasDataChange, 
+  palmRejection = true, 
+  initialAnswer = '', 
+  initialCanvasData = [] 
+}: ProblemCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [recognitionResults, setRecognitionResults] = useState<RecognitionResult[]>([]);
-  const [recognitionText, setRecognitionText] = useState<string>('');
+  const [recognitionText, setRecognitionText] = useState<string>(initialAnswer);
   const [averageConfidence, setAverageConfidence] = useState<number>(0);
   const [lowConfidenceCount, setLowConfidenceCount] = useState<number>(0);
   const [recognitionTime, setRecognitionTime] = useState<number>(0);
   const [isRecognizing, setIsRecognizing] = useState<boolean>(false);
   const [canvasSize, setCanvasSize] = useState({ width: 400, height: 120 });
+  const [isRestoredAnswer, setIsRestoredAnswer] = useState<boolean>(!!initialAnswer);
 
   // 화면 크기에 따른 캔버스 크기 계산 (실제 크기와 표시 크기 일치)
   const calculateCanvasSize = () => {
@@ -55,6 +64,25 @@ export default function ProblemCardV2({ problem, number, onAnswerChange, palmRej
     };
   }, []);
 
+  // 기존 답안 복원 처리
+  useEffect(() => {
+    console.log(`🔍 문제 ${problem.id} 복원 확인: initialAnswer="${initialAnswer}", currentText="${recognitionText}"`);
+    
+    if (initialAnswer && initialAnswer !== recognitionText) {
+      setRecognitionText(initialAnswer);
+      setIsRestoredAnswer(true);
+      console.log(`✅ 문제 ${problem.id} 답안 복원: ${initialAnswer}`);
+    } else if (!initialAnswer && recognitionText && !isRestoredAnswer) {
+      // 새로 그린 답안인 경우
+      console.log(`📝 문제 ${problem.id} 새 답안: ${recognitionText}`);
+    }
+  }, [initialAnswer, problem.id]);
+  
+  // 캔버스 데이터 복원 상태 로깅
+  useEffect(() => {
+    console.log(`🎨 문제 ${problem.id} 캔버스 데이터: ${initialCanvasData.length}개 스트로크`);
+  }, [initialCanvasData.length, problem.id]);
+
   const handleAnalysisComplete = (result: AnalysisResult) => {
     setAnalysisResult(result);
   };
@@ -69,9 +97,16 @@ export default function ProblemCardV2({ problem, number, onAnswerChange, palmRej
     setAverageConfidence(combined.averageConfidence);
     setLowConfidenceCount(combined.lowConfidenceCount);
     setIsRecognizing(false);
+    setIsRestoredAnswer(false); // 새로 인식된 답안은 복원된 것이 아님
     
     // 부모 컴포넌트에 결과 전달
     onAnswerChange(problem.id, combined.text);
+  };
+
+  const handleCanvasDataUpdate = (strokeData: StrokeData[]) => {
+    if (onCanvasDataChange) {
+      onCanvasDataChange(problem.id, strokeData);
+    }
   };
 
   const handleClear = () => {
@@ -81,7 +116,10 @@ export default function ProblemCardV2({ problem, number, onAnswerChange, palmRej
     setAverageConfidence(0);
     setLowConfidenceCount(0);
     setRecognitionTime(0);
+    setIsRestoredAnswer(false);
     onAnswerChange(problem.id, '');
+    // 캔버스 데이터도 클리어
+    handleCanvasDataUpdate([]);
   };
 
   return (
@@ -201,11 +239,13 @@ export default function ProblemCardV2({ problem, number, onAnswerChange, palmRej
             onAnalysisComplete={handleAnalysisComplete}
             onRecognitionComplete={handleRecognitionComplete}
             onClear={handleClear}
+            onCanvasDataChange={handleCanvasDataUpdate}
             autoAnalyze={true}
             canvasWidth={canvasSize.width}
             canvasHeight={canvasSize.height}
             simplifiedUI={true}
             palmRejection={palmRejection}
+            initialCanvasData={initialCanvasData}
           />
         </div>
       </div>
@@ -237,8 +277,17 @@ export default function ProblemCardV2({ problem, number, onAnswerChange, palmRej
               color: '#6b7280', 
               marginBottom: '0.25rem' 
             }}>
-              인식된 답
-              {lowConfidenceCount > 0 && (
+              {isRestoredAnswer ? '복원된 답안' : '인식된 답'}
+              {isRestoredAnswer && (
+                <span style={{ 
+                  color: '#10b981', 
+                  marginLeft: '0.5rem',
+                  fontSize: '0.7rem'
+                }}>
+                  ✅ 복원됨
+                </span>
+              )}
+              {lowConfidenceCount > 0 && !isRestoredAnswer && (
                 <span style={{ 
                   color: '#f59e0b', 
                   marginLeft: '0.5rem',

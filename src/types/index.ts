@@ -18,6 +18,14 @@ export interface ProblemCardProps {
   number: number;
   onAnswerChange: (problemId: number, answer: string) => void;
   palmRejection?: boolean;
+  initialAnswer?: string; // 기존 답안 복원을 위한 prop
+  initialCanvasData?: StrokeData[]; // 기존 드로잉 복원을 위한 prop
+  onCanvasDataChange?: (problemId: number, strokeData: StrokeData[]) => void; // 드로잉 변경 시 콜백
+}
+
+// 캔버스 드로잉 데이터 타입 정의
+export interface StrokeData {
+  points: Array<[number, number, number]>; // [x, y, pressure]
 }
 
 export interface ScoreResultProps {

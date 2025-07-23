@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Problem, ProblemResult } from '../types';
+import { Problem, ProblemResult, StrokeData } from '../types';
 import ProblemCard from './ProblemCard';
 import ScoreResult from './ScoreResult';
 import SettingsPage from './SettingsPage';
@@ -10,6 +10,7 @@ export default function MathPractice() {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [userAnswers, setUserAnswers] = useState<{[key: number]: string}>({});
+  const [canvasData, setCanvasData] = useState<{[key: number]: StrokeData[]}>({});
   const [isGraded, setIsGraded] = useState(false);
   const [results, setResults] = useState<ProblemResult[]>([]);
   const [showSettingsPage, setShowSettingsPage] = useState(false);
@@ -49,6 +50,7 @@ export default function MathPractice() {
     setProblems(newProblems);
     setCurrentPage(1);
     setUserAnswers({});
+    setCanvasData({});
     setIsGraded(false);
     setResults([]);
   };
@@ -57,6 +59,14 @@ export default function MathPractice() {
     setUserAnswers(prev => ({
       ...prev,
       [problemId]: answer
+    }));
+  };
+
+  const updateCanvasData = (problemId: number, strokeData: StrokeData[]) => {
+    console.log(`💾 문제 ${problemId} 캔버스 데이터 업데이트: ${strokeData.length}개 스트로크`);
+    setCanvasData(prev => ({
+      ...prev,
+      [problemId]: strokeData
     }));
   };
 
@@ -170,7 +180,10 @@ export default function MathPractice() {
               problem={problem} 
               number={startIndex + index + 1}
               onAnswerChange={updateUserAnswer}
+              onCanvasDataChange={updateCanvasData}
               palmRejection={palmRejection}
+              initialAnswer={userAnswers[problem.id] || ''}
+              initialCanvasData={canvasData[problem.id] || []}
             />
           ))}
         </div>
