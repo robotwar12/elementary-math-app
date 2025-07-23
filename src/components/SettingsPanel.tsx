@@ -7,9 +7,11 @@ export default function SettingsPanel({
   firstNumberDigits,
   secondNumberDigits,
   totalPagesCount,
+  palmRejection,
   onFirstNumberDigitsChange,
   onSecondNumberDigitsChange,
   onTotalPagesCountChange,
+  onPalmRejectionChange,
   onToggleSettings
 }: SettingsPanelProps) {
   if (!showSettings) return null;
@@ -113,6 +115,84 @@ export default function SettingsPanel({
             <option value={4}>4자리 (1000~9999)</option>
             <option value={5}>5자리 (10000~99999)</option>
           </select>
+        </div>
+      </div>
+
+      {/* Palm Rejection 설정 */}
+      <div style={{ marginTop: '2rem' }}>
+        <h4 style={{ margin: '0 0 1rem 0', color: '#374151', fontSize: '1.1rem' }}>
+          <i className="ri-hand-heart-line" style={{ marginRight: '0.5rem', color: '#4f46e5' }}></i>
+          터치 설정
+        </h4>
+        
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          padding: '1rem',
+          backgroundColor: 'white',
+          border: '2px solid #d1d5db',
+          borderRadius: '8px'
+        }}>
+          <div>
+            <label style={{ 
+              display: 'block', 
+              fontSize: '1rem', 
+              fontWeight: 'bold', 
+              color: '#374151',
+              marginBottom: '0.25rem'
+            }}>
+              <i className="ri-shield-check-line" style={{ marginRight: '0.5rem', color: '#10b981' }}></i>
+              Palm Rejection (손바닥 터치 방지)
+            </label>
+            <span style={{ fontSize: '0.9rem', color: '#6b7280' }}>
+              터치펜 사용 시 손바닥 터치로 인한 스크롤 방지
+            </span>
+          </div>
+          
+          <div 
+            onClick={() => onPalmRejectionChange(!palmRejection)}
+            style={{
+              width: '60px',
+              height: '32px',
+              backgroundColor: palmRejection ? '#10b981' : '#d1d5db',
+              borderRadius: '16px',
+              position: 'relative',
+              cursor: 'pointer',
+              transition: 'background-color 0.3s ease',
+              border: 'none',
+              outline: 'none'
+            }}
+          >
+            <div
+              style={{
+                width: '28px',
+                height: '28px',
+                backgroundColor: 'white',
+                borderRadius: '50%',
+                position: 'absolute',
+                top: '2px',
+                left: palmRejection ? '30px' : '2px',
+                transition: 'left 0.3s ease',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ 
+          marginTop: '0.75rem',
+          padding: '0.75rem',
+          backgroundColor: palmRejection ? '#dcfce7' : '#fef3c7',
+          borderRadius: '6px',
+          fontSize: '0.85rem',
+          color: palmRejection ? '#166534' : '#92400e'
+        }}>
+          <i className={palmRejection ? "ri-check-line" : "ri-alert-line"} style={{ marginRight: '0.5rem' }}></i>
+          {palmRejection 
+            ? '✅ Palm Rejection이 활성화되어 손바닥 터치가 차단됩니다' 
+            : '⚠️ Palm Rejection이 비활성화되어 손바닥 터치가 감지될 수 있습니다'
+          }
         </div>
       </div>
 

@@ -17,6 +17,7 @@ export interface ProblemCardProps {
   problem: Problem;
   number: number;
   onAnswerChange: (problemId: number, answer: string) => void;
+  palmRejection?: boolean;
 }
 
 export interface ScoreResultProps {
@@ -30,8 +31,10 @@ export interface SettingsPanelProps {
   firstNumberDigits: number;
   secondNumberDigits: number;
   totalPagesCount: number;
+  palmRejection: boolean;
   onFirstNumberDigitsChange: (digits: number) => void;
   onSecondNumberDigitsChange: (digits: number) => void;
   onTotalPagesCountChange: (count: number) => void;
+  onPalmRejectionChange: (enabled: boolean) => void;
   onToggleSettings: () => void;
 }

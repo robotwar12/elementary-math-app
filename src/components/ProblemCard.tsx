@@ -6,7 +6,7 @@ import { ConnectedCanvas } from '../app/connected-components-demo/components/Con
 import { AnalysisResult } from '../app/connected-components-demo/components/ComponentAnalyzer';
 import { RecognitionResult, ONNXDigitRecognizer } from '../app/connected-components-demo/components/ONNXDigitRecognizer';
 
-export default function ProblemCardV2({ problem, number, onAnswerChange }: ProblemCardProps) {
+export default function ProblemCardV2({ problem, number, onAnswerChange, palmRejection = true }: ProblemCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [recognitionResults, setRecognitionResults] = useState<RecognitionResult[]>([]);
@@ -205,6 +205,7 @@ export default function ProblemCardV2({ problem, number, onAnswerChange }: Probl
             canvasWidth={canvasSize.width}
             canvasHeight={canvasSize.height}
             simplifiedUI={true}
+            palmRejection={palmRejection}
           />
         </div>
       </div>

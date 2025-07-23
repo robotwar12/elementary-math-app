@@ -7,9 +7,11 @@ interface SettingsPageProps {
   firstNumberDigits: number;
   secondNumberDigits: number;
   totalPagesCount: number;
+  palmRejection: boolean;
   onFirstNumberDigitsChange: (value: number) => void;
   onSecondNumberDigitsChange: (value: number) => void;
   onTotalPagesCountChange: (value: number) => void;
+  onPalmRejectionChange: (enabled: boolean) => void;
   onGoBack: () => void;
 }
 
@@ -17,9 +19,11 @@ export default function SettingsPage({
   firstNumberDigits,
   secondNumberDigits,
   totalPagesCount,
+  palmRejection,
   onFirstNumberDigitsChange,
   onSecondNumberDigitsChange,
   onTotalPagesCountChange,
+  onPalmRejectionChange,
   onGoBack
 }: SettingsPageProps) {
   return (
@@ -74,9 +78,11 @@ export default function SettingsPage({
             firstNumberDigits={firstNumberDigits}
             secondNumberDigits={secondNumberDigits}
             totalPagesCount={totalPagesCount}
+            palmRejection={palmRejection}
             onFirstNumberDigitsChange={onFirstNumberDigitsChange}
             onSecondNumberDigitsChange={onSecondNumberDigitsChange}
             onTotalPagesCountChange={onTotalPagesCountChange}
+            onPalmRejectionChange={onPalmRejectionChange}
             onToggleSettings={() => {}} // 빈 함수 (사용하지 않음)
           />
         </div>

@@ -14,6 +14,7 @@ interface ConnectedCanvasProps {
   canvasWidth?: number
   canvasHeight?: number
   simplifiedUI?: boolean // 메인 페이지용 간소화된 UI
+  palmRejection?: boolean // Palm Rejection 활성화 여부
 }
 
 export function ConnectedCanvas({
@@ -24,7 +25,8 @@ export function ConnectedCanvas({
   autoAnalyze = true,
   canvasWidth = 400,
   canvasHeight = 200,
-  simplifiedUI = false
+  simplifiedUI = false,
+  palmRejection = true
 }: ConnectedCanvasProps) {
   
   const analyzerRef = useRef<ComponentAnalyzer>(new ComponentAnalyzer())
@@ -163,12 +165,12 @@ export function ConnectedCanvas({
     }
   }
 
-  // Canvas 컨테이너에 이벤트 리스너 추가 (demo 방식)
+  // Canvas 컨테이너에 이벤트 리스너 추가 (Palm Rejection 조건부 적용)
   useEffect(() => {
     const container = containerRef.current
-    if (!container) return
+    if (!container || !palmRejection) return
 
-    // Canvas 영역에서만 터치/스크롤 이벤트 차단
+    // Palm Rejection이 활성화된 경우에만 터치/스크롤 이벤트 차단
     container.addEventListener('touchstart', preventTouch, { passive: false })
     container.addEventListener('touchmove', preventTouch, { passive: false })
     container.addEventListener('touchend', preventTouch, { passive: false })
@@ -187,7 +189,7 @@ export function ConnectedCanvas({
       container.removeEventListener('contextmenu', preventContext)
       container.removeEventListener('dragstart', preventDrag)
     }
-  }, [])
+  }, [palmRejection])
 
   // 컴포넌트 언마운트 시 정리
   useEffect(() => {
@@ -228,8 +230,26 @@ export function ConnectedCanvas({
   // 모든 스트로크 데이터 보관 (시각화와 분리)
   const allStrokes = useRef<Array<Array<[number, number, number]>>>([])
 
-  // Canvas 영역에서만 터치/스크롤 이벤트 차단 (demo 방식 적용)
+  // Palm Rejection 기능: 손바닥 터치 방지 (멀티터치 감지 및 차단)
   const preventTouch = (e: TouchEvent) => {
+    // 멀티터치 감지 - 2개 이상의 터치가 있으면 차단
+    if (e.touches.length > 1) {
+      console.log('🚫 Palm Rejection: 멀티터치 감지됨 - 차단')
+      e.preventDefault()
+      e.stopPropagation()
+      return false
+    }
+
+    // 터치 크기가 비정상적으로 큰 경우 (손바닥) 차단
+    const touch = e.touches[0]
+    if (touch && (touch.radiusX > 20 || touch.radiusY > 20)) {
+      console.log('🚫 Palm Rejection: 큰 터치 영역 감지됨 - 손바닥으로 판단하여 차단')
+      e.preventDefault()
+      e.stopPropagation()
+      return false
+    }
+
+    // 일반 터치/스크롤 차단
     e.preventDefault()
     e.stopPropagation()
     return false
@@ -453,7 +473,7 @@ export function ConnectedCanvas({
           className="flex justify-center canvas-responsive-container"
           ref={containerRef}
           style={{
-            touchAction: 'none',           // Canvas 영역에서만 터치 액션 제한
+            touchAction: palmRejection ? 'none' : 'auto',  // Palm Rejection 조건부 적용
             userSelect: 'none',            // 텍스트 선택 방지
             WebkitUserSelect: 'none',      // Safari 호환성
             WebkitTouchCallout: 'none',    // iOS 호환성
@@ -513,6 +533,7 @@ export function ConnectedCanvas({
           <p>💡 숫자를 그려보세요. 스트로크 완료 시 자동으로 연결성분 분석과 ONNX 숫자 인식을 실행합니다.</p>
           <p>🎨 각 연결성분은 서로 다른 색상의 경계선으로 표시됩니다.</p>
           <p>🤖 ONNX 모델을 통해 실시간으로 숫자를 인식하고 신뢰도를 표시합니다.</p>
+          <p>🖐️ Palm Rejection 기능으로 터치펜 사용 시 손바닥 터치가 차단됩니다.</p>
         </div>
       )}
     </div>

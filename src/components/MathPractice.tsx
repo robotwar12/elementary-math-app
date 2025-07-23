@@ -16,6 +16,7 @@ export default function MathPractice() {
   const [firstNumberDigits, setFirstNumberDigits] = useState(2);
   const [secondNumberDigits, setSecondNumberDigits] = useState(2);
   const [totalPagesCount, setTotalPagesCount] = useState(3);
+  const [palmRejection, setPalmRejection] = useState(true); // 기본값: ON
   const problemsPerPage = 6;
 
   const generateNumberByDigits = (digits: number) => {
@@ -107,9 +108,11 @@ export default function MathPractice() {
         firstNumberDigits={firstNumberDigits}
         secondNumberDigits={secondNumberDigits}
         totalPagesCount={totalPagesCount}
+        palmRejection={palmRejection}
         onFirstNumberDigitsChange={setFirstNumberDigits}
         onSecondNumberDigitsChange={setSecondNumberDigits}
         onTotalPagesCountChange={setTotalPagesCount}
+        onPalmRejectionChange={setPalmRejection}
         onGoBack={() => setShowSettingsPage(false)}
       />
     );
@@ -167,6 +170,7 @@ export default function MathPractice() {
               problem={problem} 
               number={startIndex + index + 1}
               onAnswerChange={updateUserAnswer}
+              palmRejection={palmRejection}
             />
           ))}
         </div>
