@@ -71,31 +71,13 @@ export function CanvasDrawing({
     }, 500)
   }
 
-  // Canvas 컨테이너에 이벤트 리스너 추가 (demo 방식)
+  // Palm Rejection 설정 업데이트
   useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    // Canvas 영역에서만 터치/스크롤 이벤트 차단
-    container.addEventListener('touchstart', preventTouch, { passive: false })
-    container.addEventListener('touchmove', preventTouch, { passive: false })
-    container.addEventListener('touchend', preventTouch, { passive: false })
-    container.addEventListener('touchcancel', preventTouch, { passive: false })
-    container.addEventListener('wheel', preventWheel, { passive: false })
-    container.addEventListener('contextmenu', preventContext)
-    container.addEventListener('dragstart', preventDrag)
-
-    return () => {
-      // 정리
-      container.removeEventListener('touchstart', preventTouch)
-      container.removeEventListener('touchmove', preventTouch)
-      container.removeEventListener('touchend', preventTouch)
-      container.removeEventListener('touchcancel', preventTouch)
-      container.removeEventListener('wheel', preventWheel)
-      container.removeEventListener('contextmenu', preventContext)
-      container.removeEventListener('dragstart', preventDrag)
-    }
-  }, [])
+    updateConfig({
+      penOnlyMode: palmRejection,
+      sensitivity: palmRejectionSensitivity
+    })
+  }, [palmRejection, palmRejectionSensitivity, updateConfig])
 
   // 컴포넌트 언마운트 시 타임아웃 정리
   useEffect(() => {
@@ -165,7 +147,7 @@ export function CanvasDrawing({
     }
   }
 
-  // Pointer 이벤트 처리 (터치펜, 마우스, 터치 통합) - demo 방식 적용
+  // Pointer 이벤트 처리 (고급 Palm Rejection 적용)
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault()
     e.stopPropagation()
@@ -173,9 +155,18 @@ export function CanvasDrawing({
     const canvas = canvasRef.current
     if (!canvas) return
 
+    // Palm Rejection 검사
+    const rejectionStatus = checkPointerInput(e)
+    if (!rejectionStatus.isAllowed) {
+      console.log(`🚫 Palm Rejection: ${rejectionStatus.reason}`)
+      return
+    }
+
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    // 활성 포인터로 등록
+    addActivePointer(e.pointerId)
     isDrawingRef.current = true
     currentStrokePoints.current = []
 
@@ -185,6 +176,8 @@ export function CanvasDrawing({
 
     // 첫 포인트 추가
     currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
+
+    console.log(`✏️ 펜 그리기 시작: ${rejectionStatus.reason}`)
 
     // Pointer 이벤트 리스너 추가
     const handlePointerMove = (e: PointerEvent) => {
@@ -229,6 +222,9 @@ export function CanvasDrawing({
       if (e) {
         e.preventDefault()
         e.stopPropagation()
+        
+        // 활성 포인터에서 제거
+        removeActivePointer(e.pointerId)
       }
 
       isDrawingRef.current = false
@@ -264,6 +260,8 @@ export function CanvasDrawing({
 
       // 드로잉 완료 후 실시간 인식 트리거
       triggerRealTimeRecognition()
+      
+      console.log('✅ 펜 그리기 완료')
     }
 
     // 이벤트 리스너 등록 (passive: false로 preventDefault 활성화)
@@ -316,18 +314,30 @@ export function CanvasDrawing({
 
   return (
     <div className="space-y-4">
+      {/* Palm Rejection 상태 표시 */}
+      {palmRejectionStatus && palmRejection && (
+        <div className={`text-center text-xs py-1 px-2 rounded ${
+          palmRejectionStatus.isAllowed 
+            ? 'bg-green-100 text-green-700' 
+            : 'bg-red-100 text-red-700'
+        }`}>
+          {palmRejectionStatus.reason}
+        </div>
+      )}
+
       {/* 캔버스 - 200x100px (실제 답안영역 크기) */}
       <div className="border border-gray-300 rounded p-2 bg-gray-50 drawing-area">
         <div className="text-center mb-2">
           <span className="text-xs text-gray-600">
             답안 작성란 (200×100px)
+            {palmRejection && <span className="text-blue-600 ml-2">✋ Palm Rejection</span>}
           </span>
         </div>
         <div 
           className="flex justify-center canvas-container"
           ref={containerRef}
           style={{
-            touchAction: 'none',           // Canvas 영역에서만 터치 액션 제한
+            touchAction: palmRejection ? 'none' : 'auto',  // Palm Rejection 조건부 적용
             userSelect: 'none',            // 텍스트 선택 방지
             WebkitUserSelect: 'none',      // Safari 호환성
             WebkitTouchCallout: 'none',    // iOS 호환성
@@ -374,6 +384,9 @@ export function CanvasDrawing({
         <p>💡 작은 답안란에 연속된 숫자를 써주세요</p>
         <p>📝 스타일러스 펜 압력 감응으로 더 정확한 인식!</p>
         <p>✨ 부드러운 필기감으로 자연스럽게 써보세요</p>
+        {palmRejection && (
+          <p className="text-blue-600">🖐️ Palm Rejection으로 손바닥 터치가 차단됩니다</p>
+        )}
       </div>
     </div>
   )
