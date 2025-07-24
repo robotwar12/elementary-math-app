@@ -20,12 +20,29 @@ export default function MathPractice() {
   const [secondNumberDigits, setSecondNumberDigits] = useState(2);
   const [totalPagesCount, setTotalPagesCount] = useState(3);
   const [palmRejection, setPalmRejection] = useState(true); // 기본값: ON
+  const [isTabletMode, setIsTabletMode] = useState(false);
   const problemsPerPage = 6;
 
   const palmRejectionRef = useRef(palmRejection);
   useEffect(() => {
     palmRejectionRef.current = palmRejection;
   }, [palmRejection]);
+
+  // 클라이언트사이드에서만 태블릿 모드 확인
+  useEffect(() => {
+    const checkTabletMode = () => {
+      setIsTabletMode(
+        window.innerWidth >= 768 && window.innerWidth <= 1440
+      );
+    };
+
+    checkTabletMode();
+    window.addEventListener('resize', checkTabletMode);
+    
+    return () => {
+      window.removeEventListener('resize', checkTabletMode);
+    };
+  }, []);
 
   // 토글 버튼 이벤트 핸들러
   const handleTogglePalmRejection = (e: React.MouseEvent | React.TouchEvent) => {
@@ -221,6 +238,10 @@ export default function MathPractice() {
   return (
     <div
       className='container'
+      style={{
+        // 태블릿에서 고정 높이 보장
+        height: isTabletMode ? '100vh' : 'auto'
+      }}
     >
       {/* 🖐️ Palm Rejection 토글 버튼 - 최상단 */}
       <div

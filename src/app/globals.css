@@ -257,6 +257,92 @@ body {
   }
 }
 
+/* 갤럭시북 12 세로모드 (1440x2160) 전용: 6문제가 한 화면에 모두 표시되도록 최적화 */
+@media (min-width: 768px) and (max-width: 1440px) {
+  body {
+    overflow: hidden;
+  }
+  
+  .container {
+    height: 100vh;
+    padding: 1rem;
+    overflow-y: hidden; /* 세로 스크롤만 차단, 가로는 허용 */
+    overflow-x: visible; /* 문제번호가 가로로 나가도 보이도록 */
+    max-height: 100vh;
+  }
+  
+  .math-practice {
+    height: 100%;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    overflow: visible; /* 문제번호가 컨테이너 밖으로 나가도 보이도록 */
+  }
+  
+  .header {
+    margin-bottom: 1.5rem;
+    flex-shrink: 0;
+  }
+  
+  .header h1 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+  }
+  
+  .header p {
+    font-size: 1rem;
+  }
+  
+  /* 2x3 그리드로 6문제 배치 (세로모드에 최적화) */
+  .problem-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 1rem;
+    flex: 1;
+    overflow: visible; /* 문제번호가 그리드 경계를 벗어나도 보이도록 */
+    padding: 15px; /* 문제번호를 위한 여백 추가 */
+    margin: -15px; /* 여백으로 인한 전체 크기 조정 */
+  }
+  
+  .problem-card {
+    padding: 1rem;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: visible; /* 문제번호가 잘리지 않도록 변경 */
+    position: relative;
+    z-index: 1;
+  }
+  
+  .problem-text {
+    font-size: 1.4rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  /* 캔버스 영역 크기 최적화 - 세로모드에서는 더 큰 캔버스 */
+  .canvas-container, .canvas-responsive-container {
+    max-height: 120px;
+  }
+  
+  .canvas-responsive {
+    max-height: 120px;
+  }
+  
+  /* 페이지네이션 영역 */
+  .pagination {
+    margin-top: 1rem;
+    padding: 0.75rem 0;
+    flex-shrink: 0;
+  }
+  
+  .pagination-button {
+    padding: 0.75rem 1.25rem;
+    font-size: 1rem;
+  }
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 1rem;

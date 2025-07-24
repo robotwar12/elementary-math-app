@@ -31,14 +31,22 @@ export default function ProblemCardV2({
     if (typeof window === 'undefined') return { width: 400, height: 120 };
     
     const screenWidth = window.innerWidth;
+    const screenHeight = window.innerHeight;
+    
     if (screenWidth <= 400) {
       // 모바일: 여백 40px 고려하여 최대 350px, 최소 280px
       const width = Math.max(Math.min(screenWidth - 40, 350), 280);
       // 비율 유지: 400:120 = 10:3
       const height = Math.round(width * 0.3);
       return { width, height };
+    } else if (screenWidth >= 768 && screenWidth <= 1024) {
+      // 태블릿: 6문제 한 화면에 맞춰 작은 캔버스
+      const containerWidth = (screenWidth - 60) / 3; // 3열 그리드, 여백 고려
+      const width = Math.min(containerWidth - 20, 320); // 카드 패딩 고려
+      const height = Math.min(80, Math.round(width * 0.25)); // 더 납작한 비율
+      return { width, height };
     } else if (screenWidth <= 768) {
-      // 태블릿: 조금 더 큰 캔버스
+      // 작은 태블릿
       const width = 360;
       const height = Math.round(width * 0.3); // 108px
       return { width, height };
@@ -139,7 +147,8 @@ export default function ProblemCardV2({
         justifyContent: 'center', 
         fontSize: '14px', 
         fontWeight: 'bold',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+        zIndex: 10
       }}>
         {number}
       </div>
