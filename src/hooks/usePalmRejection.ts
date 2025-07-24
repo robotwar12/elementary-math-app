@@ -45,12 +45,13 @@ export const usePalmRejection = ({
     const status = managerRef.current.checkPointerInput(event, existingTouches);
     console.log('🔍 PalmRejectionManager.checkPointerInput 결과:', status);
     
-    if (onStatusChange) {
-      onStatusChange(status);
-    }
+    // 상태 변경 콜백을 호출하지 않음 - UI 메시지 방지
+    // if (onStatusChange) {
+    //   onStatusChange(status);
+    // }
 
     return status;
-  }, [enabled, onStatusChange]);
+  }, [enabled]);
 
   // 터치 입력 검사
   const checkTouchInput = useCallback((event: TouchEvent): PalmRejectionStatus => {
@@ -64,12 +65,13 @@ export const usePalmRejection = ({
 
     const status = managerRef.current.checkTouchInput(event);
     
-    if (onStatusChange) {
-      onStatusChange(status);
-    }
+    // 상태 변경 콜백을 호출하지 않음 - UI 메시지 방지
+    // if (onStatusChange) {
+    //   onStatusChange(status);
+    // }
 
     return status;
-  }, [enabled, onStatusChange]);
+  }, [enabled]);
 
   // 활성 포인터 관리
   const addActivePointer = useCallback((pointerId: number) => {

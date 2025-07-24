@@ -78,9 +78,13 @@ export class PalmRejectionManager {
       };
     }
 
-    // 펜 입력인지 확인
+    // 펜 입력인지 확인 - 여기가 핵심!
+    console.log('🔍 checkPenInput 호출 중...');
     const penCheck = this.checkPenInput(event);
+    console.log('🔍 checkPenInput 결과:', penCheck);
+    
     if (!penCheck.isAllowed) {
+      console.log('🔍 PalmRejectionManager 결과 (펜 입력 차단):', penCheck);
       return penCheck;
     }
 
@@ -177,46 +181,61 @@ export class PalmRejectionManager {
   private checkPenInput(event: PointerEvent | React.PointerEvent): PalmRejectionStatus {
     const inputType = this.getInputType(event);
     
+    console.log('🔍 checkPenInput 실행:', {
+      pointerType: event.pointerType,
+      pressure: event.pressure,
+      sensitivity: this.config.sensitivity,
+      pressureThreshold: this.config.pressureThreshold
+    });
+    
     // pointerType이 'pen'이면 확실한 펜 입력
     if (event.pointerType === 'pen') {
-      return {
+      const status = {
         isAllowed: true,
         reason: 'Stylus pen 감지됨',
-        inputType: 'pen',
+        inputType: 'pen' as const,
         pressure: event.pressure
       };
+      console.log('🔍 checkPenInput 결과 (Stylus pen):', status);
+      return status;
     }
 
     // 압력값으로 펜 입력 추정
     if (event.pressure && event.pressure > this.config.pressureThreshold && event.pressure < 1) {
-      return {
+      const status = {
         isAllowed: true,
         reason: `압력 감지로 펜 입력 추정 (${event.pressure.toFixed(2)})`,
         inputType: inputType,
         pressure: event.pressure
       };
+      console.log('🔍 checkPenInput 결과 (압력 감지):', status);
+      return status;
     }
 
     // 민감도에 따른 추가 검사
     if (this.config.sensitivity === 'low') {
       // 낮은 민감도: 마우스도 허용
       if (event.pointerType === 'mouse') {
-        return {
+        const status = {
           isAllowed: true,
           reason: '마우스 입력 허용 (낮은 민감도)',
-          inputType: 'mouse',
+          inputType: 'mouse' as const,
           pressure: event.pressure
         };
+        console.log('🔍 checkPenInput 결과 (마우스 허용):', status);
+        return status;
       }
     }
 
-    // 펜 입력이 아닌 경우
-    return {
+    // 펜 입력이 아닌 경우 - 여기서 차단!
+    const status = {
       isAllowed: false,
-      reason: `펜 입력이 아님 (${event.pointerType || 'unknown'}, 압력: ${event.pressure?.toFixed(2) || 'N/A'})`,
+      reason: `Palm Rejection: 펜 입력이 아님 (${event.pointerType || 'unknown'}, 압력: ${event.pressure?.toFixed(2) || 'N/A'})`,
       inputType: inputType,
       pressure: event.pressure
     };
+    console.log('🔍 checkPenInput 결과 (차단):', status);
+    return status;
   }
 
   // 감도별 설정 프리셋

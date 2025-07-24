@@ -4,6 +4,8 @@ import { useEffect, RefObject, useRef, useState } from 'react'
 import { getStroke } from 'perfect-freehand'
 import { ComponentAnalyzer, AnalysisResult, ConnectedComponent } from './ComponentAnalyzer'
 import { ONNXDigitRecognizer, RecognitionResult, ConnectedComponent as ONNXConnectedComponent } from './ONNXDigitRecognizer'
+import { usePalmRejection } from '../../../hooks/usePalmRejection'
+import { PalmRejectionStatus } from '../../../utils/palmRejection'
 
 // StrokeData 타입 정의 (타입 모듈과 동기화)
 interface StrokeData {
@@ -42,9 +44,34 @@ export function ConnectedCanvas({
   const recognizerRef = useRef<ONNXDigitRecognizer>(new ONNXDigitRecognizer())
   const analysisTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // State 먼저 선언
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isRecognizing, setIsRecognizing] = useState(false)
   const [lastAnalysisResult, setLastAnalysisResult] = useState<AnalysisResult | null>(null)
+
+  // Palm Rejection Hook 추가 (state 선언 후)
+  const {
+    containerRef: palmContainerRef,
+    checkPointerInput,
+    addActivePointer,
+    removeActivePointer,
+    clearActivePointers,
+    updateConfig
+  } = usePalmRejection({
+    enabled: palmRejection,  // Palm Rejection 활성화
+    config: {
+      penOnlyMode: palmRejection,
+      sensitivity: 'medium'
+    }
+  })
+
+  // containerRef와 palmContainerRef 동기화
+  useEffect(() => {
+    if (containerRef.current) {
+      palmContainerRef.current = containerRef.current
+    }
+  }, [palmContainerRef])
 
   // ONNX 모델 초기화
   useEffect(() => {
@@ -400,15 +427,29 @@ export function ConnectedCanvas({
 
   // Pointer 이벤트 처리 (demo 방식 적용) - 좌표 변환 추가
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    console.log(`🔍 handlePointerDown 호출됨 - pointerType: ${e.pointerType}, pressure: ${e.pressure}`)
+    
     e.preventDefault()
     e.stopPropagation()
     
     const canvas = canvasRef.current
     if (!canvas) return
 
+    // ✅ Palm Rejection 검사 추가
+    console.log(`🔍 Palm Rejection 검사 시작...`)
+    const rejectionStatus = checkPointerInput(e)
+    console.log(`🔍 Palm Rejection 결과:`, rejectionStatus)
+    
+    if (!rejectionStatus.isAllowed) {
+      console.log(`🚫 Palm Rejection: ${rejectionStatus.reason}`)
+      return
+    }
+
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    // ✅ Palm Rejection 통과한 경우에만 활성 포인터로 등록
+    addActivePointer(e.pointerId)
     isDrawingRef.current = true
     currentStrokePoints.current = []
 
@@ -417,6 +458,8 @@ export function ConnectedCanvas({
     const pressure = e.pressure || 0.5
 
     currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
+
+    console.log(`✏️ 펜 그리기 시작: ${rejectionStatus.reason}`)
 
     const handlePointerMove = (e: PointerEvent) => {
       if (!isDrawingRef.current) return
@@ -453,6 +496,9 @@ export function ConnectedCanvas({
       if (e) {
         e.preventDefault()
         e.stopPropagation()
+        
+        // ✅ 활성 포인터에서 제거
+        removeActivePointer(e.pointerId)
       }
 
       isDrawingRef.current = false
@@ -491,6 +537,8 @@ export function ConnectedCanvas({
 
       // 스트로크 완료 후 연결성분 분석 트리거
       triggerAnalysis()
+      
+      console.log('✅ 펜 그리기 완료')
     }
 
     canvas.addEventListener('pointermove', handlePointerMove, { passive: false })
@@ -598,7 +646,9 @@ export function ConnectedCanvas({
           <p>💡 숫자를 그려보세요. 스트로크 완료 시 자동으로 연결성분 분석과 ONNX 숫자 인식을 실행합니다.</p>
           <p>🎨 각 연결성분은 서로 다른 색상의 경계선으로 표시됩니다.</p>
           <p>🤖 ONNX 모델을 통해 실시간으로 숫자를 인식하고 신뢰도를 표시합니다.</p>
-          <p>🖐️ Palm Rejection 기능으로 터치펜 사용 시 손바닥 터치가 차단됩니다.</p>
+          {palmRejection && (
+            <p className="text-blue-600">🖐️ Palm Rejection으로 터치펜 사용 시 손바닥 터치가 차단됩니다</p>
+          )}
         </div>
       )}
     </div>

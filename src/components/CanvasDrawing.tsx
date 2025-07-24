@@ -1,9 +1,8 @@
 'use client'
 
-import { useEffect, RefObject, useRef, useState } from 'react'
+import { useEffect, RefObject, useRef, useState, useCallback } from 'react'
 import { getStroke } from 'perfect-freehand'
 import { usePalmRejection } from '../hooks/usePalmRejection'
-import { PalmRejectionStatus } from '../utils/palmRejection'
 
 interface CanvasDrawingProps {
   canvasRef: RefObject<HTMLCanvasElement | null>
@@ -29,7 +28,8 @@ export function CanvasDrawing({
   
   const recognitionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const [palmRejectionStatus, setPalmRejectionStatus] = useState<PalmRejectionStatus | null>(null)
+  const currentStrokePoints = useRef<Array<[number, number, number]>>([])
+  const [isDrawing, setIsDrawing] = useState(false)
 
   // Palm Rejection Hook 사용
   const {
@@ -37,15 +37,13 @@ export function CanvasDrawing({
     checkPointerInput,
     addActivePointer,
     removeActivePointer,
-    clearActivePointers,
     updateConfig
   } = usePalmRejection({
     enabled: palmRejection,
     config: {
       penOnlyMode: palmRejection,
       sensitivity: palmRejectionSensitivity
-    },
-    onStatusChange: setPalmRejectionStatus
+    }
   })
 
   // containerRef와 palmContainerRef 동기화
@@ -56,20 +54,18 @@ export function CanvasDrawing({
   }, [palmContainerRef])
 
   // 실시간 인식 함수 (디바운스 적용)
-  const triggerRealTimeRecognition = () => {
+  const triggerRealTimeRecognition = useCallback(() => {
     if (!realTimeRecognition || isProcessing) return
 
-    // 기존 타임아웃 클리어
     if (recognitionTimeoutRef.current) {
       clearTimeout(recognitionTimeoutRef.current)
     }
 
-    // 500ms 후 인식 실행
     recognitionTimeoutRef.current = setTimeout(() => {
       console.log('🔄 실시간 인식 시작...')
       onRecognize()
     }, 500)
-  }
+  }, [realTimeRecognition, isProcessing, onRecognize])
 
   // Palm Rejection 설정 업데이트
   useEffect(() => {
@@ -90,178 +86,30 @@ export function CanvasDrawing({
   
   // 캔버스 초기 설정
   useEffect(() => {
-    console.log('🔍 CanvasDrawing 컴포넌트 마운트됨')
-    console.log('🔍 Palm Rejection 설정:', { palmRejection, palmRejectionSensitivity })
-    
     const canvas = canvasRef.current
-    if (!canvas) {
-      console.log('❌ 캔버스를 찾을 수 없음')
-      return
-    }
-
-    console.log('✅ 캔버스 찾음:', canvas)
+    if (!canvas) return
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // 투명 배경으로 초기화 (DigitRecognizer가 Alpha 채널을 사용)
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    
-    // 드로잉 스타일 설정 (실제 답안지 스타일)
-    ctx.strokeStyle = '#000000'  // 검은색 선
-    ctx.fillStyle = '#000000'    // 검은색 채우기
-    ctx.lineWidth = 2            // 얇은 선 (연필 굵기)
+    ctx.strokeStyle = '#000000'
+    ctx.fillStyle = '#000000'
+    ctx.lineWidth = 2
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
-    ctx.globalAlpha = 1.0        // 완전 불투명
-    
-    console.log('✅ 캔버스 초기화 완료')
-  }, [canvasRef, palmRejection, palmRejectionSensitivity])
+    ctx.globalAlpha = 1.0
+  }, [canvasRef])
 
-  // 현재 스트로크 포인트 저장
-  const currentStrokePoints = useRef<Array<[number, number, number]>>([])
-  const isDrawingRef = useRef(false)
-
-
-  // 좌표 변환 함수 (표시 크기 → 실제 크기)
+  // 좌표 변환 함수
   const getScaledCoordinates = (clientX: number, clientY: number, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect()
     const scaleX = canvas.width / rect.width
     const scaleY = canvas.height / rect.height
-    
     return {
       x: (clientX - rect.left) * scaleX,
       y: (clientY - rect.top) * scaleY
     }
-  }
-
-  // Pointer 이벤트 처리 (고급 Palm Rejection 적용)
-  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    console.log(`🔍 handlePointerDown 호출됨 - pointerType: ${e.pointerType}, pressure: ${e.pressure}`)
-    
-    e.preventDefault()
-    e.stopPropagation()
-    
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    // Palm Rejection 검사
-    console.log(`🔍 Palm Rejection 검사 시작...`)
-    const rejectionStatus = checkPointerInput(e)
-    console.log(`🔍 Palm Rejection 결과:`, rejectionStatus)
-    
-    if (!rejectionStatus.isAllowed) {
-      console.log(`🚫 Palm Rejection: ${rejectionStatus.reason}`)
-      return
-    }
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    // 활성 포인터로 등록
-    addActivePointer(e.pointerId)
-    isDrawingRef.current = true
-    currentStrokePoints.current = []
-
-    // 좌표 변환 적용
-    const scaledCoords = getScaledCoordinates(e.clientX, e.clientY, canvas)
-    const pressure = e.pressure || 0.5
-
-    // 첫 포인트 추가
-    currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
-
-    console.log(`✏️ 펜 그리기 시작: ${rejectionStatus.reason}`)
-
-    // Pointer 이벤트 리스너 추가
-    const handlePointerMove = (e: PointerEvent) => {
-      if (!isDrawingRef.current) return
-
-      e.preventDefault()
-      e.stopPropagation()
-
-      // 좌표 변환 적용
-      const scaledCoords = getScaledCoordinates(e.clientX, e.clientY, canvas)
-      const pressure = e.pressure || 0.5
-
-      // 포인트 추가
-      currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
-
-      // Perfect Freehand로 부드러운 스트로크 생성 - 압력 감응 브러시
-      const dynamicBrushSize = 3 + (pressure * 2) // 압력에 따른 동적 크기
-      const stroke = getStroke(currentStrokePoints.current, {
-        size: dynamicBrushSize,
-        thinning: 0.5,
-        smoothing: 0.5,
-        streamline: 0.5,
-        easing: (t) => t,
-        start: {
-          taper: 0,
-          easing: (t) => t,
-        },
-        end: {
-          taper: 0,
-          easing: (t) => t,
-        },
-      })
-
-      // 캔버스 다시 그리기 (현재 스트로크만)
-      redrawCanvas()
-      drawStroke(ctx, stroke)
-    }
-
-    const handlePointerUp = (e?: PointerEvent) => {
-      if (!isDrawingRef.current) return
-
-      if (e) {
-        e.preventDefault()
-        e.stopPropagation()
-        
-        // 활성 포인터에서 제거
-        removeActivePointer(e.pointerId)
-      }
-
-      isDrawingRef.current = false
-      
-      // 이벤트 리스너 제거
-      canvas.removeEventListener('pointermove', handlePointerMove)
-      canvas.removeEventListener('pointerup', handlePointerUp)
-      canvas.removeEventListener('pointercancel', handlePointerUp)
-      canvas.removeEventListener('pointerleave', handlePointerUp)
-
-      // 최종 스트로크 그리기 - 압력 감응 브러시
-      if (currentStrokePoints.current.length > 1) {
-        const finalPressure = currentStrokePoints.current[currentStrokePoints.current.length - 1][2]
-        const dynamicBrushSize = 3 + (finalPressure * 2)
-        const stroke = getStroke(currentStrokePoints.current, {
-          size: dynamicBrushSize,
-          thinning: 0.5,
-          smoothing: 0.5,
-          streamline: 0.5,
-          easing: (t) => t,
-          start: {
-            taper: 0,
-            easing: (t) => t,
-          },
-          end: {
-            taper: 0,
-            easing: (t) => t,
-          },
-        })
-
-        drawStroke(ctx, stroke)
-      }
-
-      // 드로잉 완료 후 실시간 인식 트리거
-      triggerRealTimeRecognition()
-      
-      console.log('✅ 펜 그리기 완료')
-    }
-
-    // 이벤트 리스너 등록 (passive: false로 preventDefault 활성화)
-    canvas.addEventListener('pointermove', handlePointerMove, { passive: false })
-    canvas.addEventListener('pointerup', handlePointerUp, { passive: false })
-    canvas.addEventListener('pointercancel', handlePointerUp, { passive: false })
-    canvas.addEventListener('pointerleave', handlePointerUp, { passive: false })
   }
 
   // Perfect Freehand 스트로크를 캔버스에 그리기
@@ -272,18 +120,15 @@ export function CanvasDrawing({
     ctx.beginPath()
 
     if (stroke.length === 1) {
-      // 단일 점인 경우
       const [x, y] = stroke[0]
       ctx.arc(x, y, 1, 0, 2 * Math.PI)
     } else {
-      // 다중 점인 경우 폴리곤으로 그리기
       ctx.moveTo(stroke[0][0], stroke[0][1])
       for (let i = 1; i < stroke.length; i++) {
         ctx.lineTo(stroke[i][0], stroke[i][1])
       }
       ctx.closePath()
     }
-
     ctx.fill()
   }
 
@@ -291,34 +136,97 @@ export function CanvasDrawing({
   const redrawCanvas = () => {
     const canvas = canvasRef.current
     if (!canvas) return
-
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-
-    // 현재 이미지 데이터 백업
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-    
-    // 캔버스 지우기
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    
-    // 이미지 데이터 복원 (기존 스트로크 유지)
     ctx.putImageData(imageData, 0, 0)
   }
 
+  // Pointer 이벤트 핸들러
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const rejectionStatus = checkPointerInput(e)
+    if (!rejectionStatus.isAllowed) {
+      console.log(`🚫 Palm Rejection: ${rejectionStatus.reason}`)
+      return
+    }
+
+    addActivePointer(e.pointerId)
+    setIsDrawing(true)
+    currentStrokePoints.current = []
+
+    const scaledCoords = getScaledCoordinates(e.clientX, e.clientY, canvas)
+    const pressure = e.pressure || 0.5
+    currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
+    
+    console.log(`✏️ 펜 그리기 시작: ${rejectionStatus.reason}`)
+  }, [checkPointerInput, addActivePointer, canvasRef])
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return
+    
+    e.preventDefault()
+    e.stopPropagation()
+
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const scaledCoords = getScaledCoordinates(e.clientX, e.clientY, canvas)
+    const pressure = e.pressure || 0.5
+    currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
+
+    const dynamicBrushSize = 3 + (pressure * 2)
+    const stroke = getStroke(currentStrokePoints.current, {
+      size: dynamicBrushSize,
+      thinning: 0.5,
+      smoothing: 0.5,
+      streamline: 0.5,
+    })
+
+    redrawCanvas()
+    drawStroke(ctx, stroke)
+  }, [isDrawing, canvasRef])
+
+  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return
+
+    e.preventDefault()
+    e.stopPropagation()
+
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    removeActivePointer(e.pointerId)
+    setIsDrawing(false)
+
+    if (currentStrokePoints.current.length > 1) {
+      const finalPressure = currentStrokePoints.current[currentStrokePoints.current.length - 1][2]
+      const dynamicBrushSize = 3 + (finalPressure * 2)
+      const stroke = getStroke(currentStrokePoints.current, {
+        size: dynamicBrushSize,
+        thinning: 0.5,
+        smoothing: 0.5,
+        streamline: 0.5,
+      })
+      drawStroke(ctx, stroke)
+    }
+
+    triggerRealTimeRecognition()
+    console.log('✅ 펜 그리기 완료')
+  }, [isDrawing, removeActivePointer, triggerRealTimeRecognition, canvasRef])
+
   return (
     <div className="space-y-4">
-      {/* Palm Rejection 상태 표시 */}
-      {palmRejectionStatus && palmRejection && (
-        <div className={`text-center text-xs py-1 px-2 rounded ${
-          palmRejectionStatus.isAllowed 
-            ? 'bg-green-100 text-green-700' 
-            : 'bg-red-100 text-red-700'
-        }`}>
-          {palmRejectionStatus.reason}
-        </div>
-      )}
-
-      {/* 캔버스 - 200x100px (실제 답안영역 크기) */}
       <div className="border border-gray-300 rounded p-2 bg-gray-50 drawing-area">
         <div className="text-center mb-2">
           <span className="text-xs text-gray-600">
@@ -330,11 +238,11 @@ export function CanvasDrawing({
           className="flex justify-center canvas-container"
           ref={containerRef}
           style={{
-            touchAction: palmRejection ? 'none' : 'auto',  // Palm Rejection 조건부 적용
-            userSelect: 'none',            // 텍스트 선택 방지
-            WebkitUserSelect: 'none',      // Safari 호환성
-            WebkitTouchCallout: 'none',    // iOS 호환성
-            maxWidth: '100%',              // 모바일 호환성
+            touchAction: 'none',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            WebkitTouchCallout: 'none',
+            maxWidth: '100%',
             overflow: 'hidden'
           }}
         >
@@ -344,19 +252,19 @@ export function CanvasDrawing({
             height={100}
             className="border border-gray-400 cursor-crosshair bg-white canvas-responsive"
             onPointerDown={handlePointerDown}
-            onClick={() => console.log('🔍 Canvas 클릭됨!')}
-            onMouseDown={() => console.log('🔍 Canvas 마우스다운!')}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
             style={{ 
-              backgroundColor: 'transparent',  // 투명 배경
+              backgroundColor: 'transparent',
               cursor: 'crosshair',
-              maxWidth: '100%',               // 모바일에서 화면에 맞춤
-              height: 'auto'                  // 비율 유지
+              maxWidth: '100%',
+              height: 'auto'
             }}
           />
         </div>
       </div>
       
-      {/* 컨트롤 버튼 */}
       <div className="flex justify-center gap-4">
         <button
           onClick={onClear}
@@ -374,7 +282,6 @@ export function CanvasDrawing({
         </button>
       </div>
       
-      {/* 사용법 안내 */}
       <div className="text-center text-xs text-gray-500">
         <p>💡 작은 답안란에 연속된 숫자를 써주세요</p>
         <p>📝 스타일러스 펜 압력 감응으로 더 정확한 인식!</p>

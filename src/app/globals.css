@@ -2,6 +2,59 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 🖐️ 전역 Palm Rejection CSS */
+.palm-rejection-active {
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: none !important;
+  overflow-x: hidden !important;
+}
+
+.palm-rejection-active * {
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+/* 🎯 Palm Rejection 토글 버튼만 완전히 터치 허용 (최우선) */
+[data-palm-toggle-container],
+[data-palm-toggle-container] *,
+[data-palm-toggle],
+[data-palm-toggle] * {
+  touch-action: manipulation !important;
+  user-select: auto !important;
+  -webkit-user-select: auto !important;
+  -webkit-touch-callout: default !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* UI 요소들은 터치 허용 */
+.palm-rejection-active button,
+.palm-rejection-active input,
+.palm-rejection-active select,
+.palm-rejection-active textarea,
+.palm-rejection-active a,
+.palm-rejection-active label,
+.palm-rejection-active [role="button"],
+.palm-rejection-active .touch-allowed {
+  touch-action: auto !important;
+  user-select: auto !important;
+  -webkit-user-select: auto !important;
+  -webkit-touch-callout: default !important;
+  cursor: pointer !important;
+}
+
+/* 캔버스 영역은 펜 전용 */
+.palm-rejection-active canvas,
+.palm-rejection-active .canvas-container,
+.palm-rejection-active .drawing-area {
+  touch-action: none !important; /* 캔버스는 터치 차단 유지 */
+  cursor: crosshair !important;
+}
+
 @import url('https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css');
 
 * {
