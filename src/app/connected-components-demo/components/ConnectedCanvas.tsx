@@ -400,10 +400,10 @@ export function ConnectedCanvas({
     allStrokes.current.forEach(strokePoints => {
       if (strokePoints.length > 0) {
         const stroke = getStroke(strokePoints, {
-          size: 4,        // 3 → 4로 증가 (더 두꺼운 스트로크)
-          thinning: 0.2,  // 0.5 → 0.2로 감소 (일정한 두께 유지)
-          smoothing: 0.3, // 0.5 → 0.3으로 감소 (더 선명한 경계)
-          streamline: 0.3, // 0.5 → 0.3으로 감소 (입력 충실도 향상)
+          size: 4,        // 고정 굵기 4픽셀
+          thinning: 0,    // 굵기 변화 완전 제거
+          smoothing: 0.3, // 더 선명한 경계
+          streamline: 0.3, // 입력 충실도 향상
           easing: (t) => t,
           start: { taper: 0, easing: (t) => t },
           end: { taper: 0, easing: (t) => t },
@@ -473,11 +473,11 @@ export function ConnectedCanvas({
 
       currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
 
-      // Perfect Freehand로 부드러운 스트로크 생성 - 압력 감응 브러시
-      const dynamicBrushSize = 4 + (pressure * 2) // 압력에 따른 동적 크기
+      // Perfect Freehand로 부드러운 스트로크 생성 - 고정 굵기
+      const fixedBrushSize = 4 // 인식 최적화를 위한 고정 굵기
       const stroke = getStroke(currentStrokePoints.current, {
-        size: dynamicBrushSize,
-        thinning: 0.2,  // 일정한 두께 유지
+        size: fixedBrushSize,
+        thinning: 0,    // 굵기 변화 완전 제거
         smoothing: 0.3, // 더 선명한 경계
         streamline: 0.3, // 입력 충실도 향상
         easing: (t) => t,
@@ -508,13 +508,12 @@ export function ConnectedCanvas({
       canvas.removeEventListener('pointercancel', handlePointerUp)
       canvas.removeEventListener('pointerleave', handlePointerUp)
 
-      // 최종 스트로크 그리기 및 저장 - 압력 감응 브러시
+      // 최종 스트로크 그리기 및 저장 - 고정 굵기
       if (currentStrokePoints.current.length > 1) {
-        const finalPressure = currentStrokePoints.current[currentStrokePoints.current.length - 1][2]
-        const dynamicBrushSize = 4 + (finalPressure * 2)
+        const fixedBrushSize = 4 // 일관된 굵기로 최종 스트로크 그리기
         const stroke = getStroke(currentStrokePoints.current, {
-          size: dynamicBrushSize,
-          thinning: 0.2,  // 일정한 두께 유지
+          size: fixedBrushSize,
+          thinning: 0,    // 굵기 변화 완전 제거
           smoothing: 0.3, // 더 선명한 경계
           streamline: 0.3, // 입력 충실도 향상
           easing: (t) => t,

@@ -29,16 +29,11 @@ export function CanvasDrawing({
   const recognitionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const currentStrokePoints = useRef<Array<[number, number, number]>>([])
+  const allStrokes = useRef<Array<Array<[number, number, number]>>>([])
   const [isDrawing, setIsDrawing] = useState(false)
 
-  // Palm Rejection Hook 사용
-  const {
-    containerRef: palmContainerRef,
-    checkPointerInput,
-    addActivePointer,
-    removeActivePointer,
-    updateConfig
-  } = usePalmRejection({
+  // Palm Rejection Hook 사용 (활성화된 경우에만)
+  const palmRejectionHook = usePalmRejection({
     enabled: palmRejection,
     config: {
       penOnlyMode: palmRejection,
@@ -46,12 +41,20 @@ export function CanvasDrawing({
     }
   })
 
-  // containerRef와 palmContainerRef 동기화
+  const {
+    containerRef: palmContainerRef,
+    checkPointerInput,
+    addActivePointer,
+    removeActivePointer,
+    updateConfig
+  } = palmRejectionHook
+
+  // containerRef와 palmContainerRef 동기화 (Palm Rejection 활성화 시에만)
   useEffect(() => {
-    if (containerRef.current) {
+    if (palmRejection && containerRef.current) {
       palmContainerRef.current = containerRef.current
     }
-  }, [palmContainerRef])
+  }, [palmRejection, palmContainerRef])
 
   // 실시간 인식 함수 (디바운스 적용)
   const triggerRealTimeRecognition = useCallback(() => {
@@ -132,19 +135,182 @@ export function CanvasDrawing({
     ctx.fill()
   }
 
-  // 캔버스 다시 그리기 (기존 스트로크는 유지)
-  const redrawCanvas = () => {
+  // 모든 스트로크를 다시 그리기
+  const redrawAllStrokes = () => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+    // 캔버스 초기화
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.putImageData(imageData, 0, 0)
+
+    const fixedBrushSize = 4
+    
+    // 완료된 모든 스트로크 그리기
+    allStrokes.current.forEach(strokePoints => {
+      if (strokePoints.length > 0) {
+        const stroke = getStroke(strokePoints, {
+          size: fixedBrushSize,
+          thinning: 0,
+          smoothing: 0.5,
+          streamline: 0.5,
+        })
+        drawStroke(ctx, stroke)
+      }
+    })
+
+    // 현재 그리고 있는 스트로크 그리기
+    if (isDrawing && currentStrokePoints.current.length > 0) {
+      const currentStroke = getStroke(currentStrokePoints.current, {
+        size: fixedBrushSize,
+        thinning: 0,
+        smoothing: 0.5,
+        streamline: 0.5,
+      })
+      drawStroke(ctx, currentStroke)
+    }
   }
 
-  // Pointer 이벤트 핸들러
-  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+  // 터치 이벤트 핸들러 (Palm Rejection 비활성화 시)
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault()
+    const canvas = canvasRef.current
+    if (!canvas || e.touches.length !== 1) return
+
+    setIsDrawing(true)
+    currentStrokePoints.current = []
+
+    const touch = e.touches[0]
+    const scaledCoords = getScaledCoordinates(touch.clientX, touch.clientY, canvas)
+    const pressure = 0.5
+    currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
+
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.fillStyle = '#000000'
+      ctx.beginPath()
+      ctx.arc(scaledCoords.x, scaledCoords.y, 2, 0, 2 * Math.PI)
+      ctx.fill()
+    }
+    console.log('✏️ 터치 그리기 시작 (Palm Rejection 비활성화)')
+  }, [canvasRef])
+
+  // 터치 이벤트 핸들러 (Palm Rejection 비활성화 시)
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return
+    e.preventDefault()
+
+    const canvas = canvasRef.current
+    if (!canvas || e.touches.length !== 1) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const touch = e.touches[0]
+    const scaledCoords = getScaledCoordinates(touch.clientX, touch.clientY, canvas)
+    const pressure = 0.5
+    
+    if (currentStrokePoints.current.length > 0) {
+      const lastPoint = currentStrokePoints.current[currentStrokePoints.current.length - 1]
+      
+      ctx.strokeStyle = '#000000'
+      ctx.lineWidth = 4
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.beginPath()
+      ctx.moveTo(lastPoint[0], lastPoint[1])
+      ctx.lineTo(scaledCoords.x, scaledCoords.y)
+      ctx.stroke()
+    }
+
+    currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
+  }, [isDrawing, canvasRef])
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return
+    e.preventDefault()
+
+    setIsDrawing(false)
+
+    if (currentStrokePoints.current.length > 0) {
+      allStrokes.current.push([...currentStrokePoints.current])
+      console.log(`✅ 터치 스트로크 완료 (총 ${allStrokes.current.length}개 스트로크)`)
+    }
+
+    currentStrokePoints.current = []
+    triggerRealTimeRecognition()
+    console.log('✅ 터치 그리기 완료')
+  }, [isDrawing, triggerRealTimeRecognition])
+
+  // 마우스 이벤트 핸들러 (Palm Rejection 비활성화 시)
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    e.preventDefault()
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    setIsDrawing(true)
+    currentStrokePoints.current = []
+
+    const scaledCoords = getScaledCoordinates(e.clientX, e.clientY, canvas)
+    const pressure = 0.5
+    currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
+
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.fillStyle = '#000000'
+      ctx.beginPath()
+      ctx.arc(scaledCoords.x, scaledCoords.y, 2, 0, 2 * Math.PI)
+      ctx.fill()
+    }
+    console.log('✏️ 마우스 그리기 시작 (Palm Rejection 비활성화)')
+  }, [canvasRef])
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return
+    e.preventDefault()
+
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const scaledCoords = getScaledCoordinates(e.clientX, e.clientY, canvas)
+    const pressure = 0.5
+    
+    if (currentStrokePoints.current.length > 0) {
+      const lastPoint = currentStrokePoints.current[currentStrokePoints.current.length - 1]
+      
+      ctx.strokeStyle = '#000000'
+      ctx.lineWidth = 4
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.beginPath()
+      ctx.moveTo(lastPoint[0], lastPoint[1])
+      ctx.lineTo(scaledCoords.x, scaledCoords.y)
+      ctx.stroke()
+    }
+
+    currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
+  }, [isDrawing, canvasRef])
+
+  const handleMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return
+    e.preventDefault()
+
+    setIsDrawing(false)
+
+    if (currentStrokePoints.current.length > 0) {
+      allStrokes.current.push([...currentStrokePoints.current])
+      console.log(`✅ 마우스 스트로크 완료 (총 ${allStrokes.current.length}개 스트로크)`)
+    }
+
+    currentStrokePoints.current = []
+    triggerRealTimeRecognition()
+    console.log('✅ 마우스 그리기 완료')
+  }, [isDrawing, triggerRealTimeRecognition])
+
+  // Palm Rejection 활성화 시 핸들러
+  const handlePalmRejectionPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault()
     e.stopPropagation()
     
@@ -156,19 +322,27 @@ export function CanvasDrawing({
       console.log(`🚫 Palm Rejection: ${rejectionStatus.reason}`)
       return
     }
-
+    
+    console.log(`✏️ 펜 그리기 시작: ${rejectionStatus.reason}`)
     addActivePointer(e.pointerId)
+
     setIsDrawing(true)
     currentStrokePoints.current = []
 
     const scaledCoords = getScaledCoordinates(e.clientX, e.clientY, canvas)
-    const pressure = e.pressure || 0.5
+    const pressure = 0.5
     currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
-    
-    console.log(`✏️ 펜 그리기 시작: ${rejectionStatus.reason}`)
+
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.fillStyle = '#000000'
+      ctx.beginPath()
+      ctx.arc(scaledCoords.x, scaledCoords.y, 2, 0, 2 * Math.PI)
+      ctx.fill()
+    }
   }, [checkPointerInput, addActivePointer, canvasRef])
 
-  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePalmRejectionPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return
     
     e.preventDefault()
@@ -180,50 +354,42 @@ export function CanvasDrawing({
     if (!ctx) return
 
     const scaledCoords = getScaledCoordinates(e.clientX, e.clientY, canvas)
-    const pressure = e.pressure || 0.5
+    const pressure = 0.5
+    
+    if (currentStrokePoints.current.length > 0) {
+      const lastPoint = currentStrokePoints.current[currentStrokePoints.current.length - 1]
+      
+      ctx.strokeStyle = '#000000'
+      ctx.lineWidth = 4
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.beginPath()
+      ctx.moveTo(lastPoint[0], lastPoint[1])
+      ctx.lineTo(scaledCoords.x, scaledCoords.y)
+      ctx.stroke()
+    }
+
     currentStrokePoints.current.push([scaledCoords.x, scaledCoords.y, pressure])
-
-    const dynamicBrushSize = 3 + (pressure * 2)
-    const stroke = getStroke(currentStrokePoints.current, {
-      size: dynamicBrushSize,
-      thinning: 0.5,
-      smoothing: 0.5,
-      streamline: 0.5,
-    })
-
-    redrawCanvas()
-    drawStroke(ctx, stroke)
   }, [isDrawing, canvasRef])
 
-  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePalmRejectionPointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return
 
     e.preventDefault()
     e.stopPropagation()
 
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
     removeActivePointer(e.pointerId)
     setIsDrawing(false)
 
-    if (currentStrokePoints.current.length > 1) {
-      const finalPressure = currentStrokePoints.current[currentStrokePoints.current.length - 1][2]
-      const dynamicBrushSize = 3 + (finalPressure * 2)
-      const stroke = getStroke(currentStrokePoints.current, {
-        size: dynamicBrushSize,
-        thinning: 0.5,
-        smoothing: 0.5,
-        streamline: 0.5,
-      })
-      drawStroke(ctx, stroke)
+    if (currentStrokePoints.current.length > 0) {
+      allStrokes.current.push([...currentStrokePoints.current])
+      console.log(`✅ 스트로크 완료 (총 ${allStrokes.current.length}개 스트로크)`)
     }
 
+    currentStrokePoints.current = []
     triggerRealTimeRecognition()
     console.log('✅ 펜 그리기 완료')
-  }, [isDrawing, removeActivePointer, triggerRealTimeRecognition, canvasRef])
+  }, [isDrawing, removeActivePointer, triggerRealTimeRecognition])
 
   return (
     <div className="space-y-4">
@@ -238,7 +404,7 @@ export function CanvasDrawing({
           className="flex justify-center canvas-container"
           ref={containerRef}
           style={{
-            touchAction: 'none',
+            touchAction: palmRejection ? 'none' : 'auto',
             userSelect: 'none',
             WebkitUserSelect: 'none',
             WebkitTouchCallout: 'none',
@@ -251,10 +417,22 @@ export function CanvasDrawing({
             width={200}
             height={100}
             className="border border-gray-400 cursor-crosshair bg-white canvas-responsive"
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}
+            {...(palmRejection ? {
+              // Palm Rejection 활성화 시: Pointer 이벤트 사용
+              onPointerDown: handlePalmRejectionPointerDown,
+              onPointerMove: handlePalmRejectionPointerMove,
+              onPointerUp: handlePalmRejectionPointerUp,
+              onPointerLeave: handlePalmRejectionPointerUp
+            } : {
+              // Palm Rejection 비활성화 시: 터치/마우스 이벤트 직접 사용
+              onTouchStart: handleTouchStart,
+              onTouchMove: handleTouchMove,
+              onTouchEnd: handleTouchEnd,
+              onMouseDown: handleMouseDown,
+              onMouseMove: handleMouseMove,
+              onMouseUp: handleMouseUp,
+              onMouseLeave: handleMouseUp
+            })}
             style={{ 
               backgroundColor: 'transparent',
               cursor: 'crosshair',
@@ -267,7 +445,12 @@ export function CanvasDrawing({
       
       <div className="flex justify-center gap-4">
         <button
-          onClick={onClear}
+          onClick={() => {
+            // 모든 스트로크 초기화
+            allStrokes.current = []
+            currentStrokePoints.current = []
+            onClear()
+          }}
           className="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
           disabled={isProcessing}
         >

@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { RecognitionResult } from './ONNXDigitRecognizer';
+import { ConfidenceDisplay, AverageConfidenceDisplay } from './ConfidenceDisplay';
 
 interface RecognitionDisplayProps {
   results: RecognitionResult[];
@@ -51,36 +52,19 @@ export const RecognitionDisplay: React.FC<RecognitionDisplayProps> = ({
               {recognizedText || '숫자를 그려보세요'}
             </div>
             
+            {/* Phase 3: 개선된 신뢰도 UI */}
             {results.length > 0 && (
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-600">평균 신뢰도:</span>
-                  <span className={`ml-2 font-medium ${getConfidenceColor(averageConfidence)}`}>
-                    {(averageConfidence * 100).toFixed(1)}%
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-600">낮은 신뢰도:</span>
-                  <span className="ml-2 font-medium text-gray-800">
-                    {lowConfidenceCount}개
-                  </span>
-                </div>
-                {processingTime && (
-                  <>
-                    <div>
-                      <span className="text-gray-600">처리 시간:</span>
-                      <span className="ml-2 font-medium text-gray-800">
-                        {processingTime.toFixed(0)}ms
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">숫자 개수:</span>
-                      <span className="ml-2 font-medium text-gray-800">
-                        {results.length}개
-                      </span>
-                    </div>
-                  </>
-                )}
+              <AverageConfidenceDisplay
+                averageConfidence={averageConfidence}
+                lowConfidenceCount={lowConfidenceCount}
+                totalCount={results.length}
+                recognizedText={recognizedText}
+              />
+            )}
+            
+            {processingTime && (
+              <div className="text-center text-sm text-gray-600 mt-2">
+                ⚡ 처리 시간: {processingTime.toFixed(0)}ms
               </div>
             )}
           </div>
@@ -132,16 +116,13 @@ export const RecognitionDisplay: React.FC<RecognitionDisplayProps> = ({
                     </div>
                   )}
                   
-                  <div className="text-right">
-                    <div className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getConfidenceBadge(result.confidence)}`}>
-                      {(result.confidence * 100).toFixed(1)}%
-                    </div>
-                    {result.isLowConfidence && (
-                      <div className="text-xs text-red-600 mt-1">
-                        ⚠️ 낮은 신뢰도
-                      </div>
-                    )}
-                  </div>
+                  {/* Phase 3: 개선된 신뢰도 UI */}
+                  <ConfidenceDisplay
+                    confidence={result.confidence}
+                    predictedDigit={result.predictedDigit >= 0 ? result.predictedDigit : -1}
+                    isLowConfidence={result.isLowConfidence}
+                    compact={true}
+                  />
                 </div>
               </div>
             ))}

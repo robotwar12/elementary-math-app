@@ -21,9 +21,86 @@ export interface RecognitionResult {
   normalizedImageDataUrl?: string; // 정규화된 28x28 이미지 시각화용
 }
 
+/**
+ * 메모리 풀링을 통한 성능 최적화 클래스
+ */
+class RecognitionMemoryPool {
+  private tensorPool: Float32Array[] = [];
+  private canvasPool: HTMLCanvasElement[] = [];
+  private imageDataCache: Map<string, ImageData> = new Map();
+  private maxPoolSize = 10;
+
+  getTensor(): Float32Array {
+    return this.tensorPool.pop() || new Float32Array(28 * 28);
+  }
+
+  returnTensor(tensor: Float32Array): void {
+    if (this.tensorPool.length < this.maxPoolSize) {
+      // 텐서 초기화 후 풀에 반환
+      tensor.fill(0);
+      this.tensorPool.push(tensor);
+    }
+  }
+
+  getCanvas(): HTMLCanvasElement {
+    if (this.canvasPool.length > 0) {
+      return this.canvasPool.pop()!;
+    }
+    
+    // 브라우저 환경 체크
+    if (typeof document === 'undefined') {
+      throw new Error('Canvas API는 브라우저 환경에서만 사용 가능합니다');
+    }
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = 28;
+    canvas.height = 28;
+    return canvas;
+  }
+
+  returnCanvas(canvas: HTMLCanvasElement): void {
+    if (this.canvasPool.length < this.maxPoolSize) {
+      // 캔버스 초기화 후 풀에 반환
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, 28, 28);
+      }
+      this.canvasPool.push(canvas);
+    }
+  }
+
+  getImageData(canvas: HTMLCanvasElement, key: string): ImageData {
+    // 캐시된 ImageData 반환 (동일한 크기의 경우)
+    if (this.imageDataCache.has(key)) {
+      return this.imageDataCache.get(key)!;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas context not available');
+    
+    const imageData = ctx.createImageData(28, 28);
+    
+    // 캐시 크기 제한
+    if (this.imageDataCache.size < 50) {
+      this.imageDataCache.set(key, imageData);
+    }
+    
+    return imageData;
+  }
+
+  clear(): void {
+    this.tensorPool = [];
+    this.canvasPool = [];
+    this.imageDataCache.clear();
+  }
+}
+
 export class ONNXDigitRecognizer {
   private session: ort.InferenceSession | null = null;
   private isInitialized = false;
+  private memoryPool = new RecognitionMemoryPool();
+  private lastRecognitionTime = 0;
+  private recognitionCache = new Map<string, RecognitionResult>();
 
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
@@ -54,14 +131,17 @@ export class ONNXDigitRecognizer {
   }
 
   /**
-   * 연결성분을 28x28 이미지로 정규화 (image-preprocessor.js 방식 적용)
+   * 연결성분을 28x28 이미지로 정규화 (메모리 풀링 최적화 적용)
    */
-  private normalizeComponent(component: ConnectedComponent): Float32Array {
-    // 1단계: 연결성분을 캔버스에 렌더링
-    const canvas = this.renderComponentToCanvas(component);
+  private normalizeComponent(component: ConnectedComponent): { normalized: Float32Array; canvas: HTMLCanvasElement } {
+    // 메모리 풀에서 캔버스 재사용
+    const canvas = this.memoryPool.getCanvas();
     
-    // 2단계: 그레이스케일 변환
-    const grayscaleData = this.convertToGrayscale(canvas);
+    // 1단계: 연결성분을 캔버스에 렌더링 (최적화된 버전)
+    this.renderComponentToCanvasOptimized(component, canvas);
+    
+    // 2단계: 그레이스케일 변환 (ImageData 직접 조작)
+    const grayscaleData = this.convertToGrayscaleOptimized(canvas);
     
     // 3단계: 종횡비 유지하면서 20x20 내에서 리사이즈
     const { resizedData, newWidth, newHeight } = this.resizeKeepingAspectRatio(
@@ -71,8 +151,50 @@ export class ONNXDigitRecognizer {
     // 4단계: 28x28 패딩 및 중앙 정렬
     const paddedData = this.resizeWithPadding(resizedData, newWidth, newHeight, 28, 28);
     
-    // 5단계: MNIST 표준 정규화
-    return this.normalizeMNIST(paddedData);
+    // 5단계: MNIST 표준 정규화 (인플레이스 연산)
+    const normalized = this.normalizeMNISTOptimized(paddedData);
+    
+    return { normalized, canvas };
+  }
+
+  private renderComponentToCanvasOptimized(component: ConnectedComponent, canvas: HTMLCanvasElement): void {
+    const { pixels, boundingBox } = component;
+    const { minX, maxX, minY, maxY } = boundingBox;
+    const width = maxX - minX + 1;
+    const height = maxY - minY + 1;
+    
+    // 캔버스 크기 동적 조정
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+    
+    // ImageData 직접 조작으로 성능 최적화
+    const imageData = ctx.createImageData(width, height);
+    const data = imageData.data;
+    
+    // 배경을 흰색으로 초기화 (255, 255, 255, 255)
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = 255;     // R
+      data[i + 1] = 255; // G
+      data[i + 2] = 255; // B
+      data[i + 3] = 255; // A
+    }
+    
+    // 픽셀 렌더링 (검은색, 직접 ImageData 조작)
+    for (const pixel of pixels) {
+      const x = pixel.x - minX;
+      const y = pixel.y - minY;
+      
+      if (x >= 0 && x < width && y >= 0 && y < height) {
+        const index = (y * width + x) * 4;
+        data[index] = 0;     // R
+        data[index + 1] = 0; // G
+        data[index + 2] = 0; // B
+        data[index + 3] = 255; // A
+      }
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
   }
 
   private renderComponentToCanvas(component: ConnectedComponent): HTMLCanvasElement {
@@ -103,6 +225,48 @@ export class ONNXDigitRecognizer {
     }
     
     return canvas;
+  }
+
+  private convertToGrayscaleOptimized(canvas: HTMLCanvasElement): Float32Array {
+    const ctx = canvas.getContext('2d')!;
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    const pixelCount = canvas.width * canvas.height;
+    
+    // 메모리 풀에서 재사용 가능한 배열 가져오기
+    const grayscaleData = new Float32Array(pixelCount);
+    
+    // 32비트 워드 단위로 처리하여 성능 최적화
+    let pixelIndex = 0;
+    
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      
+      // 빠른 정수 연산으로 그레이스케일 변환
+      const gray = (r * 77 + g * 151 + b * 28) >> 8; // /256 대신 비트시프트
+      grayscaleData[pixelIndex++] = (255 - gray) / 255.0; // MNIST 반전
+    }
+    
+    // 조건부 블러링 (작은 컴포넌트만)
+    if (pixelCount < 400) { // 20x20 미만인 경우만 블러 적용
+      const blurredData = this.gaussianBlurOptimized(grayscaleData, canvas.width, canvas.height);
+      
+      // 인플레이스 이진화
+      for (let i = 0; i < blurredData.length; i++) {
+        blurredData[i] = blurredData[i] > 0.2 ? 1.0 : 0.0;
+      }
+      
+      return this.dilateOptimized(blurredData, canvas.width, canvas.height);
+    }
+    
+    // 큰 컴포넌트는 간단한 이진화만 적용
+    for (let i = 0; i < grayscaleData.length; i++) {
+      grayscaleData[i] = grayscaleData[i] > 0.5 ? 1.0 : 0.0;
+    }
+    
+    return grayscaleData;
   }
 
   private convertToGrayscale(canvas: HTMLCanvasElement): Float32Array {
@@ -246,6 +410,39 @@ export class ONNXDigitRecognizer {
   }
 
   /**
+   * 최적화된 가우시안 블러 (Float32Array 버전)
+   */
+  private gaussianBlurOptimized(data: Float32Array, width: number, height: number): Float32Array {
+    const result = new Float32Array(data.length);
+    const kernel = [
+      [0.0625, 0.125, 0.0625],
+      [0.125,  0.25,  0.125],
+      [0.0625, 0.125, 0.0625]
+    ];
+    
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let sum = 0;
+        
+        for (let ky = -1; ky <= 1; ky++) {
+          for (let kx = -1; kx <= 1; kx++) {
+            const ny = y + ky;
+            const nx = x + kx;
+            
+            if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+              sum += data[ny * width + nx] * kernel[ky + 1][kx + 1];
+            }
+          }
+        }
+        
+        result[y * width + x] = sum;
+      }
+    }
+    
+    return result;
+  }
+
+  /**
    * 가우시안 블러 적용 (선 두께 증가)
    */
   private gaussianBlur(data: Float32Array, width: number, height: number): Float32Array {
@@ -272,6 +469,38 @@ export class ONNXDigitRecognizer {
         }
         
         result[y * width + x] = sum;
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * 최적화된 형태학적 팽창 연산 (Float32Array 버전)
+   */
+  private dilateOptimized(data: Float32Array, width: number, height: number): Float32Array {
+    const result = new Float32Array(data.length);
+    const structuringElement = [
+      [-1, -1], [-1, 0], [-1, 1],
+      [0, -1],  [0, 0],  [0, 1],
+      [1, -1],  [1, 0],  [1, 1]
+    ];
+    
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let maxValue = 0;
+        
+        // 구조 요소 적용
+        for (const [dy, dx] of structuringElement) {
+          const ny = y + dy;
+          const nx = x + dx;
+          
+          if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+            maxValue = Math.max(maxValue, data[ny * width + nx]);
+          }
+        }
+        
+        result[y * width + x] = maxValue;
       }
     }
     
@@ -308,6 +537,20 @@ export class ONNXDigitRecognizer {
     }
     
     return result;
+  }
+
+  /**
+   * MNIST 최적화된 정규화 (인플레이스 연산)
+   */
+  private normalizeMNISTOptimized(data: Float32Array): Float32Array {
+    const normalized = new Float32Array(data.length);
+    
+    // MNIST 표준 정규화: (pixel - 0.1307) / 0.3081 (더 빠른 연산)
+    for (let i = 0; i < data.length; i++) {
+      normalized[i] = (data[i] - 0.1307) / 0.3081;
+    }
+    
+    return normalized;
   }
 
   private normalizeMNIST(data: Float32Array): Float32Array {
@@ -362,7 +605,33 @@ export class ONNXDigitRecognizer {
   }
 
   /**
-   * 여러 연결성분에 대한 배치 추론
+   * 작은 노이즈 제거 (Phase 3 최적화)
+   */
+  private removeSmallNoiseComponents(components: ConnectedComponent[]): ConnectedComponent[] {
+    if (components.length === 0) return [];
+    
+    // 1. 최소 픽셀 개수 필터링 (5픽셀 미만 제거)
+    const pixelFiltered = components.filter(comp => comp.pixels.length >= 5);
+    
+    // 2. 크기가 너무 작은 경계상자 제거 (3x3 미만)
+    const sizeFiltered = pixelFiltered.filter(comp => {
+      const { width, height } = comp.boundingBox;
+      return width >= 3 && height >= 3;
+    });
+    
+    // 3. 종횡비가 극단적인 컴포넌트 제거 (1:20 또는 20:1 초과)
+    const aspectFiltered = sizeFiltered.filter(comp => {
+      const { width, height } = comp.boundingBox;
+      const aspectRatio = Math.max(width, height) / Math.min(width, height);
+      return aspectRatio <= 20; // 숫자 1도 고려하여 관대하게 설정
+    });
+    
+    console.log(`🧹 노이즈 제거: ${components.length} → ${aspectFiltered.length} 연결성분`);
+    return aspectFiltered;
+  }
+
+  /**
+   * 여러 연결성분에 대한 배치 추론 (Phase 3 최적화 적용)
    */
   async recognizeDigits(components: ConnectedComponent[]): Promise<RecognitionResult[]> {
     if (!this.session) {
@@ -370,6 +639,14 @@ export class ONNXDigitRecognizer {
     }
 
     if (components.length === 0) {
+      return [];
+    }
+
+    // Phase 3: 작은 노이즈 제거 적용
+    const cleanedComponents = this.removeSmallNoiseComponents(components);
+    
+    if (cleanedComponents.length === 0) {
+      console.log('🧹 모든 연결성분이 노이즈로 판정되어 제거됨');
       return [];
     }
 
@@ -381,8 +658,11 @@ export class ONNXDigitRecognizer {
       const normalizedData: Array<{ normalized: Float32Array; imageDataUrl: string }> = [];
       
       components.forEach((component, idx) => {
-        const normalized = this.normalizeComponent(component);
+        const { normalized, canvas } = this.normalizeComponent(component);
         const imageDataUrl = this.normalizedToImageDataUrl(normalized);
+        
+        // 캔버스를 메모리 풀에 반환
+        this.memoryPool.returnCanvas(canvas);
         
         normalizedData.push({ normalized, imageDataUrl });
         
