@@ -4,56 +4,34 @@ import { PalmRejectionManager, PalmRejectionConfig, PalmRejectionStatus, prevent
 interface UsePalmRejectionOptions {
   enabled: boolean;
   config?: Partial<PalmRejectionConfig>;
-  onStatusChange?: (status: PalmRejectionStatus) => void;
 }
 
 export const usePalmRejection = ({
   enabled,
-  config = {},
-  onStatusChange
+  config = {}
 }: UsePalmRejectionOptions) => {
   const managerRef = useRef<PalmRejectionManager>(new PalmRejectionManager(config));
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 설정 업데이트
   const updateConfig = useCallback((newConfig: Partial<PalmRejectionConfig>) => {
     managerRef.current.updateConfig(newConfig);
   }, []);
 
-  // 포인터 입력 검사
   const checkPointerInput = useCallback((
     event: PointerEvent | React.PointerEvent,
     existingTouches?: TouchList
   ): PalmRejectionStatus => {
-    console.log('🔍 usePalmRejection.checkPointerInput 호출됨:', {
-      enabled,
-      pointerType: event.pointerType,
-      pressure: event.pressure
-    });
-
     if (!enabled) {
-      const status = {
+      return {
         isAllowed: true,
         reason: 'Palm Rejection 비활성화됨',
         inputType: 'unknown' as const
       };
-      console.log('🔍 usePalmRejection 결과 (비활성화):', status);
-      return status;
     }
 
-    console.log('🔍 PalmRejectionManager.checkPointerInput 호출 중...');
-    const status = managerRef.current.checkPointerInput(event, existingTouches);
-    console.log('🔍 PalmRejectionManager.checkPointerInput 결과:', status);
-    
-    // 상태 변경 콜백을 호출하지 않음 - UI 메시지 방지
-    // if (onStatusChange) {
-    //   onStatusChange(status);
-    // }
-
-    return status;
+    return managerRef.current.checkPointerInput(event, existingTouches);
   }, [enabled]);
 
-  // 터치 입력 검사
   const checkTouchInput = useCallback((event: TouchEvent): PalmRejectionStatus => {
     if (!enabled) {
       return {
@@ -63,17 +41,9 @@ export const usePalmRejection = ({
       };
     }
 
-    const status = managerRef.current.checkTouchInput(event);
-    
-    // 상태 변경 콜백을 호출하지 않음 - UI 메시지 방지
-    // if (onStatusChange) {
-    //   onStatusChange(status);
-    // }
-
-    return status;
+    return managerRef.current.checkTouchInput(event);
   }, [enabled]);
 
-  // 활성 포인터 관리
   const addActivePointer = useCallback((pointerId: number) => {
     managerRef.current.addActivePointer(pointerId);
   }, []);
@@ -86,12 +56,10 @@ export const usePalmRejection = ({
     managerRef.current.clearActivePointers();
   }, []);
 
-  // 컨테이너에 이벤트 리스너 설정
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !enabled) return;
 
-    // 터치 이벤트 차단 리스너들
     const listeners = {
       touchstart: preventTouchEvents.touchstart,
       touchmove: preventTouchEvents.touchmove,
@@ -102,12 +70,10 @@ export const usePalmRejection = ({
       dragstart: preventTouchEvents.dragstart
     };
 
-    // 이벤트 리스너 등록
     Object.entries(listeners).forEach(([event, handler]) => {
       container.addEventListener(event, handler as EventListener, { passive: false });
     });
 
-    // 정리 함수
     return () => {
       Object.entries(listeners).forEach(([event, handler]) => {
         container.removeEventListener(event, handler as EventListener);
@@ -115,7 +81,6 @@ export const usePalmRejection = ({
     };
   }, [enabled]);
 
-  // 설정 변경 시 매니저 업데이트
   useEffect(() => {
     managerRef.current.updateConfig(config);
   }, [config]);

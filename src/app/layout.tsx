@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import PWAUpdatePrompt from '@/components/PWAUpdatePrompt'
+import PalmRejectionProvider from '@/providers/PalmRejectionProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -59,8 +60,10 @@ export default function RootLayout({
         
       </head>
       <body className={inter.className}>
-        {children}
-        <PWAUpdatePrompt />
+        <PalmRejectionProvider>
+          {children}
+          <PWAUpdatePrompt />
+        </PalmRejectionProvider>
       </body>
     </html>
   )
