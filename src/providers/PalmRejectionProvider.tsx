@@ -50,21 +50,34 @@ export default function PalmRejectionProvider({ children }: PalmRejectionProvide
 
   // 전역 Palm Rejection 이벤트 리스너 관리
   useEffect(() => {
-    const preventGlobalTouch = (e: TouchEvent) => {
-      if (!palmRejectionRef.current) return;
+    // Palm Rejection이 OFF일 때는 이벤트 리스너를 등록하지 않음
+    if (!palmRejection) {
+      console.log('🟢 Palm Rejection OFF - 이벤트 리스너 등록하지 않음');
+      return;
+    }
 
+    const preventGlobalTouch = (e: TouchEvent) => {
+      console.log('🖐️ [DEBUG] preventGlobalTouch 호출됨, palmRejection 상태:', palmRejectionRef.current, 'touches:', e.touches.length);
+      
       const target = e.target as Element;
-      if (target.closest('[data-palm-toggle-container]')) return;
+      console.log('🖐️ [DEBUG] 터치 대상:', target.tagName, target.className);
+      
+      if (target.closest('[data-palm-toggle-container]')) {
+        console.log('🖐️ [DEBUG] palm-toggle-container라서 리턴');
+        return;
+      }
 
       const isAllowedElement = target.closest('button, input, select, textarea, a, label, [role="button"], .touch-allowed');
-      if (isAllowedElement) return;
+      if (isAllowedElement) {
+        console.log('🖐️ [DEBUG] 허용된 요소라서 리턴');
+        return;
+      }
       
       const isCanvasArea = target.closest('canvas, .canvas-container, .drawing-area');
       if (isCanvasArea) {
-        if (e.touches.length > 1) {
-          console.log('🚫 Palm Rejection: 캔버스 위 멀티터치 차단');
-          e.preventDefault();
-        }
+        console.log('🖐️ [DEBUG] 캔버스 영역 터치됨, Palm Rejection ON 상태에서 캔버스 터치는 허용');
+        // Palm Rejection ON 상태에서도 캔버스 영역의 터치는 완전히 허용
+        // 캔버스 자체 이벤트 핸들러가 멀티터치를 처리하도록 함
         return;
       }
 
@@ -73,14 +86,12 @@ export default function PalmRejectionProvider({ children }: PalmRejectionProvide
     };
 
     const preventDefaultIfActive = (e: Event) => {
-      if (palmRejectionRef.current) {
-        const target = e.target as Element;
-        if (target.closest('input, textarea')) return;
-        e.preventDefault();
-      }
+      const target = e.target as Element;
+      if (target.closest('input, textarea')) return;
+      e.preventDefault();
     };
 
-    console.log('🖐️ 전역 Palm Rejection 이벤트 리스너 설정');
+    console.log('🖐️ 전역 Palm Rejection 이벤트 리스너 설정 (ON 상태)');
     document.addEventListener('touchmove', preventGlobalTouch, { passive: false, capture: true });
     document.addEventListener('contextmenu', preventDefaultIfActive, { capture: true });
     document.addEventListener('dragstart', preventDefaultIfActive, { capture: true });
@@ -93,7 +104,7 @@ export default function PalmRejectionProvider({ children }: PalmRejectionProvide
       document.removeEventListener('dragstart', preventDefaultIfActive, { capture: true });
       document.removeEventListener('selectstart', preventDefaultIfActive, { capture: true });
     };
-  }, []); // 마운트/언마운트 시에만 실행
+  }, [palmRejection]); // palmRejection 상태 변경 시 재등록
 
   // palmRejection 상태에 따라 body 클래스 토글
   useEffect(() => {

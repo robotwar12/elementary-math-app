@@ -102,33 +102,72 @@ export function useCanvasEvents({
 
   // 터치 이벤트 핸들러 (Palm Rejection 비활성화 시)
   const handleTouchStart = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    console.log('🔍 [DEBUG] handleTouchStart 호출됨, touches:', e.touches.length, 'palmRejection:', palmRejection)
     e.preventDefault()
     const canvas = canvasRef.current
-    if (!canvas || e.touches.length !== 1) return
+    if (!canvas) {
+      console.log('🚫 [DEBUG] canvas 없음')
+      return
+    }
+    
+    // Palm Rejection OFF 상태에서는 멀티터치 제한을 완화
+    if (palmRejection && e.touches.length !== 1) {
+      console.log('🚫 [DEBUG] Palm Rejection ON - 멀티터치 감지로 차단, touches:', e.touches.length)
+      return
+    }
+    
+    // Palm Rejection OFF 상태에서는 첫 번째 터치만 사용하되 차단하지 않음
+    if (!palmRejection && e.touches.length === 0) {
+      console.log('🚫 [DEBUG] 터치 포인트 없음')
+      return
+    }
 
     const touch = e.touches[0]
     startDrawing(touch.clientX, touch.clientY, canvas)
-    console.log('✏️ 터치 그리기 시작 (Palm Rejection 비활성화)')
-  }, [canvasRef, startDrawing])
+    console.log('✏️ 터치 그리기 시작 (Palm Rejection:', palmRejection ? 'ON' : 'OFF', ')')
+  }, [canvasRef, startDrawing, palmRejection])
 
   const handleTouchMove = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return
+    console.log('🔍 [DEBUG] handleTouchMove 호출됨, isDrawing:', isDrawing, 'touches:', e.touches.length, 'palmRejection:', palmRejection)
+    if (!isDrawing) {
+      console.log('🚫 [DEBUG] isDrawing이 false라서 리턴')
+      return
+    }
     e.preventDefault()
 
     const canvas = canvasRef.current
-    if (!canvas || e.touches.length !== 1) return
+    if (!canvas) {
+      console.log('🚫 [DEBUG] canvas 없음 in touchMove')
+      return
+    }
+    
+    // Palm Rejection ON 상태에서만 엄격한 멀티터치 차단
+    if (palmRejection && e.touches.length !== 1) {
+      console.log('🚫 [DEBUG] Palm Rejection ON - 멀티터치로 인한 그리기 중단, touches:', e.touches.length)
+      return
+    }
+    
+    // Palm Rejection OFF 상태에서는 터치가 있는 한 계속 진행
+    if (!palmRejection && e.touches.length === 0) {
+      console.log('🚫 [DEBUG] 터치 포인트 없어서 그리기 중단')
+      return
+    }
 
     const touch = e.touches[0]
     continueDrawing(touch.clientX, touch.clientY, canvas)
-  }, [isDrawing, canvasRef, continueDrawing])
+  }, [isDrawing, canvasRef, continueDrawing, palmRejection])
 
   const handleTouchEnd = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return
+    console.log('🔍 [DEBUG] handleTouchEnd 호출됨, isDrawing:', isDrawing, 'palmRejection:', palmRejection)
+    if (!isDrawing) {
+      console.log('🚫 [DEBUG] isDrawing이 false라서 touchEnd 리턴')
+      return
+    }
     e.preventDefault()
 
     endDrawing()
-    console.log('✅ 터치 그리기 완료')
-  }, [isDrawing, endDrawing])
+    console.log('✅ 터치 그리기 완료 (Palm Rejection:', palmRejection ? 'ON' : 'OFF', ')')
+  }, [isDrawing, endDrawing, palmRejection])
 
   // 마우스 이벤트 핸들러 (Palm Rejection 비활성화 시)
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
